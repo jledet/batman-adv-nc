@@ -135,6 +135,7 @@ struct neigh_node {
 struct coding_node {
 	struct hlist_node list;
 	uint8_t addr[ETH_ALEN];
+	struct rcu_head rcu;
 	struct orig_node *orig_node;
 };
 

@@ -70,6 +70,20 @@ void neigh_node_free_ref(struct neigh_node *neigh_node)
 		call_rcu(&neigh_node->rcu, neigh_node_free_rcu);
 }
 
+void coding_node_free_rcu(struct rcu_head *rcu)
+{
+	struct coding_node *coding_node;
+
+	coding_node = container_of(rcu, struct coding_node, rcu);
+	kfree(coding_node);
+	printk(KERN_DEBUG "coding_node freed\n");
+}
+
+void coding_node_free_ref(struct coding_node *coding_node)
+{
+	call_rcu(&coding_node->rcu, coding_node_free_rcu);
+}
+
 struct neigh_node *create_neighbor(struct orig_node *orig_node,
 				   struct orig_node *orig_neigh_node,
 				   uint8_t *neigh,
@@ -105,6 +119,7 @@ static void orig_node_free_rcu(struct rcu_head *rcu)
 {
 	struct hlist_node *node, *node_tmp;
 	struct neigh_node *neigh_node, *tmp_neigh_node;
+	struct coding_node *coding_node;
 	struct orig_node *orig_node;
 
 	orig_node = container_of(rcu, struct orig_node, rcu);
@@ -126,6 +141,15 @@ static void orig_node_free_rcu(struct rcu_head *rcu)
 	}
 
 	spin_unlock_bh(&orig_node->neigh_list_lock);
+
+	/* Remove coding_nodes */
+	spin_lock_bh(&orig_node->coding_list_lock);
+	hlist_for_each_entry_safe(coding_node, node, node_tmp,
+				&orig_node->coding_list, list) {
+		hlist_del_rcu(&coding_node->list);
+		coding_node_free_ref(coding_node);
+	}
+	spin_unlock(&orig_node->coding_list_lock);
 
 	frag_list_free(&orig_node->frag_list);
 	hna_global_del_orig(orig_node->bat_priv, orig_node,
