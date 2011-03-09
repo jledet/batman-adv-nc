@@ -96,6 +96,8 @@ struct orig_node {
 				      *	 last_bcast_seqno */
 	atomic_t bond_candidates;
 	struct list_head bond_list;
+	struct hlist_head coding_list;
+	spinlock_t coding_list_lock;
 };
 
 struct gw_node {
@@ -125,6 +127,15 @@ struct neigh_node {
 	struct rcu_head rcu;
 	struct orig_node *orig_node;
 	struct hard_iface *if_incoming;
+};
+
+/**
+ *	coding_node
+ */
+struct coding_node {
+	struct hlist_node list;
+	uint8_t addr[ETH_ALEN];
+	struct orig_node *orig_node;
 };
 
 

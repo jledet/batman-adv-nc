@@ -34,6 +34,7 @@
 #include "gateway_common.h"
 #include "gateway_client.h"
 #include "unicast.h"
+#include "coding.h"
 
 void slide_own_bcast_window(struct hard_iface *hard_iface)
 {
@@ -779,6 +780,15 @@ void receive_bat_packet(struct ethhdr *ethhdr,
 
 	is_bidirectional = is_bidirectional_neigh(orig_node, orig_neigh_node,
 						batman_packet, if_incoming);
+
+	/* if this OGM seqno equals last orig_node's seqno, OGM ttl
+	 * is only decremented by one, we add a coding possibility
+	 * and originator is our neighbor */
+	if ((orig_node->last_real_seqno == batman_packet->seqno) &&
+			(orig_node->last_ttl == batman_packet->ttl + 1) &&
+			compare_eth(batman_packet->orig,
+				batman_packet->prev_sender))
+		coding_orig_neighbor(bat_priv, orig_node, orig_neigh_node);
 
 	bonding_save_primary(orig_node, orig_neigh_node, batman_packet);
 

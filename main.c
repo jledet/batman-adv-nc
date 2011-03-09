@@ -32,6 +32,7 @@
 #include "gateway_client.h"
 #include "vis.h"
 #include "hash.h"
+#include "coding.h"
 
 struct list_head hardif_list;
 
@@ -105,6 +106,9 @@ int mesh_init(struct net_device *soft_iface)
 	hna_local_add(soft_iface, soft_iface->dev_addr);
 
 	if (vis_init(bat_priv) < 1)
+		goto err;
+
+	if (coding_init(bat_priv) < 1)
 		goto err;
 
 	atomic_set(&bat_priv->mesh_state, MESH_ACTIVE);

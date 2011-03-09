@@ -1,15 +1,17 @@
 #ifndef _NET_BATMAN_ADV_CODING_H
 #define _NET_BATMAN_ADV_CODING_H
 
-void coding_orig(struct ethhdr *ethhdr, struct batman_packet *batman_packet);
 
-static inline void pretty_mac(char *str_out, char *mac)
+int coding_init(struct bat_priv *bat_priv);
+void coding_orig_neighbor(struct bat_priv *bat_priv,
+		struct orig_node *orig_node,
+		struct orig_node *neigh_node);
+
+static inline void pretty_mac(char *asc, char *addr)
 {
-	int i;
-
-	for (i = 0; i < 6; ++i) {
-		snprintf(str_out + 2*i, 3, "%02x", mac[i]);
-	}
+	snprintf(asc, 18, "%02hhx:%02hhx:%02hhx:%02hhx:%02hhx:%02hhx",
+			addr[0], addr[1], addr[2],
+			addr[3], addr[4], addr[5]);
 }
 
 #endif
