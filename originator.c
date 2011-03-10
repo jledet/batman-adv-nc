@@ -74,14 +74,18 @@ void coding_node_free_rcu(struct rcu_head *rcu)
 {
 	struct coding_node *coding_node;
 
+	printk(KERN_DEBUG "WOMBAT: freeing coding_node\n");
 	coding_node = container_of(rcu, struct coding_node, rcu);
 	kfree(coding_node);
-	printk(KERN_DEBUG "coding_node freed\n");
+	printk(KERN_DEBUG "WOMBAT: coding_node freed\n");
 }
 
 void coding_node_free_ref(struct coding_node *coding_node)
 {
-	call_rcu(&coding_node->rcu, coding_node_free_rcu);
+	if (atomic_dec_and_test(&coding_node->refcount)) {
+		printk(KERN_DEBUG "WOMBAT: call_rcu\n");
+		call_rcu(&coding_node->rcu, coding_node_free_rcu);
+	}
 }
 
 struct neigh_node *create_neighbor(struct orig_node *orig_node,
@@ -149,7 +153,7 @@ static void orig_node_free_rcu(struct rcu_head *rcu)
 		hlist_del_rcu(&coding_node->list);
 		coding_node_free_ref(coding_node);
 	}
-	spin_unlock(&orig_node->coding_list_lock);
+	spin_unlock_bh(&orig_node->coding_list_lock);
 
 	frag_list_free(&orig_node->frag_list);
 	hna_global_del_orig(orig_node->bat_priv, orig_node,
@@ -178,6 +182,7 @@ void originator_free(struct bat_priv *bat_priv)
 	if (!hash)
 		return;
 
+	printk(KERN_DEBUG "Starting node deletion\n");
 	cancel_delayed_work_sync(&bat_priv->orig_work);
 
 	bat_priv->orig_hash = NULL;
@@ -374,8 +379,10 @@ static void _purge_orig(struct bat_priv *bat_priv)
 			if (purge_orig_node(bat_priv, orig_node)) {
 				if (orig_node->gw_flags)
 					gw_node_delete(bat_priv, orig_node);
+				printk(KERN_DEBUG "WOMBAT: found orig node to purge\n");
 				hlist_del_rcu(node);
 				orig_node_free_ref(orig_node);
+				printk(KERN_DEBUG "WOMBAT: orig node purged\n");
 				continue;
 			}
 
