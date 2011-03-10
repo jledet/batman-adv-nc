@@ -60,3 +60,10 @@ void coding_orig_neighbor(struct bat_priv *bat_priv,
 		}
 	}
 }
+
+int receive_coding_packet(struct bat_priv *bat_priv,
+		struct coding_packet *coding_packet, int hdr_size)
+{
+
+	return -1;
+}

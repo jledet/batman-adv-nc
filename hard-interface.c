@@ -28,6 +28,7 @@
 #include "bat_sysfs.h"
 #include "originator.h"
 #include "hash.h"
+#include "coding.h"
 
 #include <linux/if_arp.h>
 
@@ -643,6 +644,10 @@ static int batman_skb_recv(struct sk_buff *skb, struct net_device *dev,
 	case BAT_VIS:
 		ret = recv_vis_packet(skb, hard_iface);
 		break;
+
+		/* coded packet */
+	case BAT_CODING:
+		ret = recv_coding_packet(skb, hard_iface);
 	default:
 		ret = NET_RX_DROP;
 	}

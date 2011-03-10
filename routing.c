@@ -1543,3 +1543,30 @@ int recv_vis_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 	   always free the skbuf. */
 	return NET_RX_DROP;
 }
+
+int recv_coding_packet(struct sk_buff *skb, struct hard_iface *recv_if)
+{
+	struct coding_packet *coding_packet;
+	struct ethhdr *ethhdr;
+	struct bat_priv *bat_priv = netdev_priv(recv_if->soft_iface);
+	int hdr_size = sizeof(struct coding_packet);
+
+	/* keep skb linear */
+	if (skb_linearize(skb) < 0)
+		return NET_RX_DROP;
+
+	if (unlikely(!pskb_may_pull(skb, hdr_size)))
+		return NET_RX_DROP;
+
+	coding_packet = (struct coding_packet *)skb->data;
+	ethhdr = (struct ethhdr *)skb_mac_header(skb);
+
+	/* Verify frame is destined for us */
+	if (!is_my_mac(ethhdr->h_dest) && !is_my_mac(coding_packet->dest))
+		return NET_RX_DROP;
+
+	if (receive_coding_packet(bat_priv, coding_packet, hdr_size) < 0)
+		return NET_RX_DROP;
+
+	return NET_RX_SUCCESS;
+}

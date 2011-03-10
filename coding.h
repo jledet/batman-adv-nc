@@ -6,6 +6,8 @@ int coding_init(struct bat_priv *bat_priv);
 void coding_orig_neighbor(struct bat_priv *bat_priv,
 		struct orig_node *orig_node,
 		struct orig_node *neigh_node);
+int receive_coding_packet(struct bat_priv *bat_priv,
+		struct coding_packet *coding_packet, int hdr_size);
 
 static inline void pretty_mac(char *asc, char *addr)
 {
