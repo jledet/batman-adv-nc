@@ -16,6 +16,7 @@ int coding_init(struct bat_priv *bat_priv)
 		return 0;
 
 	bat_priv->decoding_hash = hash_new(1024);
+	atomic_set(&bat_priv->last_decoding_id, 1);
 
 	if (!bat_priv->decoding_hash)
 		return -1;
@@ -92,33 +93,52 @@ uint16_t get_decoding_id(struct bat_priv *bat_priv)
 	return (uint16_t)atomic_inc_return(&bat_priv->last_decoding_id);
 }
 
-void add_decoding_skb(struct bat_priv *bat_priv, struct sk_buff *skb)
+void add_decoding_skb(struct hard_iface *hard_iface, struct sk_buff *skb,
+		uint8_t *packet_data)
 {
 	int hash_added;
-	struct unicast_packet *unicast_packet = 
-		(struct unicast_packet *)skb->data;
-	struct sk_buff *decoding_skb = skb_clone(skb, GFP_ATOMIC);
+	struct bat_priv *bat_priv = netdev_priv(hard_iface->soft_iface);
+	struct unicast_packet *unicast_packet =
+		(struct unicast_packet *)packet_data;
+	struct sk_buff *decoding_skb;
+	struct decoding_packet *decoding_packet;
 
-	struct decoding_packet *decoding_packet = 
-		kmalloc(sizeof(struct decoding_packet), GFP_ATOMIC);
+	/* We only handle unicast packets */
+	if (unicast_packet->packet_type != BAT_UNICAST) {
+		return;
+	}
 
-	printk(KERN_DEBUG "Adding decoding_packet with id %hu\n", unicast_packet->decoding_id);
+	decoding_skb = skb_clone(skb, GFP_ATOMIC);
+	if (!decoding_skb)
+		return;
+	if (skb_linearize(decoding_skb) < 0)
+		goto free_skb;
+
+	decoding_packet = kzalloc(sizeof(struct decoding_packet), GFP_ATOMIC);
+	if (!decoding_packet)
+		goto free_skb;
+
+	printk(KERN_DEBUG "Adding decoding_packet with id %hu\n",
+			unicast_packet->decoding_id);
 
 	atomic_set(&decoding_packet->refcount, 1);
 	decoding_packet->timestamp = jiffies;
 	decoding_packet->id = unicast_packet->decoding_id;
 	decoding_packet->skb = decoding_skb;
-	
+
 	hash_added = hash_add(bat_priv->decoding_hash, compare_decoding,
-			      choose_decoding, decoding_packet, &decoding_packet->hash_entry);
+			      choose_decoding, decoding_packet,
+			      &decoding_packet->hash_entry);
 	if (hash_added < 0)
 		goto free_decoding_packet;
 
 	return;
 
 free_decoding_packet:
-	dev_kfree_skb(decoding_skb);
 	kfree(decoding_packet);
+
+free_skb:
+	dev_kfree_skb(decoding_skb);
 }
 
 void decoding_packet_free_rcu(struct rcu_head *rcu)
@@ -126,6 +146,7 @@ void decoding_packet_free_rcu(struct rcu_head *rcu)
 	struct decoding_packet *decoding_packet;
 	decoding_packet = container_of(rcu, struct decoding_packet, rcu);
 
+	printk(KERN_DEBUG "WOMBAT: Freeing old skb\n");
 	dev_kfree_skb(decoding_packet->skb);
 	kfree(decoding_packet);
 }

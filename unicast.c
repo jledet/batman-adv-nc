@@ -335,10 +335,7 @@ find_router:
 		goto out;
 	}
 
-	/* Store packet for later network decoding */
 	unicast_packet->decoding_id = get_decoding_id(bat_priv);
-	add_decoding_skb(bat_priv, skb);
-
 	send_skb_packet(skb, neigh_node->if_incoming, neigh_node->addr);
 	ret = 0;
 	goto out;

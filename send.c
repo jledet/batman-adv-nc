@@ -29,6 +29,7 @@
 #include "aggregation.h"
 #include "gateway_common.h"
 #include "originator.h"
+#include "coding.h"
 
 static void send_outstanding_bcast_packet(struct work_struct *work);
 
@@ -61,6 +62,10 @@ int send_skb_packet(struct sk_buff *skb,
 {
 	struct ethhdr *ethhdr;
 
+	/* Save batman_packet position for use in add_decoding_skb(),
+	 * as we're about to push in the Ethernet header */
+	uint8_t *packet_data = skb->data;
+
 	if (hard_iface->if_status != IF_ACTIVE)
 		goto send_skb_err;
 
@@ -87,8 +92,10 @@ int send_skb_packet(struct sk_buff *skb,
 	skb_set_network_header(skb, ETH_HLEN);
 	skb->priority = TC_PRIO_CONTROL;
 	skb->protocol = __constant_htons(ETH_P_BATMAN);
-
 	skb->dev = hard_iface->net_dev;
+
+	/* Store packet for later network decoding */
+	add_decoding_skb(hard_iface, skb, packet_data);
 
 	/* dev_queue_xmit() returns a negative result on error.	 However on
 	 * congestion and traffic shaping, it drops and returns NET_XMIT_DROP

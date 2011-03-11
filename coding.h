@@ -11,22 +11,22 @@ void coding_orig_neighbor(struct bat_priv *bat_priv,
 uint16_t get_decoding_id(struct bat_priv *bat_priv);
 int receive_coding_packet(struct bat_priv *bat_priv,
 		struct coding_packet *coding_packet, int hdr_size);
-void add_decoding_skb(struct bat_priv *bat_priv, struct sk_buff *skb);
+void add_decoding_skb(struct hard_iface *hard_iface, struct sk_buff *skb,
+		uint8_t *packet_data);
 
-static inline void generate_key(struct decoding_packet *decoding_packet, uint8_t *data1)
+
+static inline void generate_key(struct decoding_packet *decoding_packet,
+		uint8_t *data1)
 {
 	struct ethhdr *ethhdr = (struct ethhdr *)skb_mac_header(decoding_packet->skb);
 	int i;
 
-	for (i = 0; i < ETH_ALEN; ++i) {
-		data1[i] = ethhdr->h_dest[i] ^ ethhdr->h_source[i] ^ 
-			((uint8_t *)&decoding_packet->id)[i & 1];
-		printk(KERN_DEBUG "WOMBAT Hash: %hhx\n", data1[i]);
+	data1[0] = (uint8_t)decoding_packet->id;
+	data1[1] = (uint8_t)*(&decoding_packet->id + 1);
+	for (i = 2; i < ETH_ALEN; ++i) {
+		data1[i] = ethhdr->h_dest[i] ^ ethhdr->h_source[i];
 	}
-
-
 }
-
 
 static inline int choose_decoding(void *data, int32_t size)
 {
