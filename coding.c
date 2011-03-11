@@ -88,6 +88,7 @@ int receive_coding_packet(struct bat_priv *bat_priv,
 
 uint16_t get_decoding_id(struct bat_priv *bat_priv)
 {
+	printk(KERN_DEBUG "WOMBAT: Increment decoding_id\n");
 	return (uint16_t)atomic_inc_return(&bat_priv->last_decoding_id);
 }
 
@@ -100,6 +101,8 @@ void add_decoding_skb(struct bat_priv *bat_priv, struct sk_buff *skb)
 
 	struct decoding_packet *decoding_packet = 
 		kmalloc(sizeof(struct decoding_packet), GFP_ATOMIC);
+
+	printk(KERN_DEBUG "Adding decoding_packet with id %hu\n", unicast_packet->decoding_id);
 
 	atomic_set(&decoding_packet->refcount, 1);
 	decoding_packet->timestamp = jiffies;
@@ -174,7 +177,6 @@ static void purge_decoding(struct work_struct *work)
 	struct bat_priv *bat_priv =
 		container_of(delayed_work, struct bat_priv, decoding_work);
 
-	printk(KERN_DEBUG "Removing old decodings %p\n", bat_priv);
 	_purge_decoding(bat_priv);
 	start_coding_timer(bat_priv);
 }

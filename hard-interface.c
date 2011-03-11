@@ -573,6 +573,7 @@ static int batman_skb_recv(struct sk_buff *skb, struct net_device *dev,
 	struct batman_packet *batman_packet;
 	struct hard_iface *hard_iface;
 	int ret;
+	printk(KERN_DEBUG "WOMBAT: Received some packet\n");
 
 	hard_iface = container_of(ptype, struct hard_iface, batman_adv_ptype);
 	skb = skb_share_check(skb, GFP_ATOMIC);
@@ -613,6 +614,9 @@ static int batman_skb_recv(struct sk_buff *skb, struct net_device *dev,
 
 	/* all receive handlers return whether they received or reused
 	 * the supplied skb. if not, we have to free the skb. */
+
+	printk(KERN_DEBUG "WOMBAT: Type %d\n", batman_packet->packet_type);
+
 
 	switch (batman_packet->packet_type) {
 		/* batman originator packet */

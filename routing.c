@@ -1368,6 +1368,7 @@ int recv_unicast_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 
 	unicast_packet = (struct unicast_packet *)skb->data;
 
+
 	/* packet for me */
 	if (is_my_mac(unicast_packet->dest)) {
 		interface_rx(recv_if->soft_iface, skb, recv_if, hdr_size);
