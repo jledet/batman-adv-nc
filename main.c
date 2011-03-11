@@ -108,7 +108,7 @@ int mesh_init(struct net_device *soft_iface)
 	if (vis_init(bat_priv) < 1)
 		goto err;
 
-	if (coding_init(bat_priv) < 1)
+	if (coding_init(bat_priv) < 0)
 		goto err;
 
 	atomic_set(&bat_priv->mesh_state, MESH_ACTIVE);
@@ -136,6 +136,7 @@ void mesh_free(struct net_device *soft_iface)
 
 	gw_node_purge(bat_priv);
 	originator_free(bat_priv);
+	coding_free(bat_priv);
 
 	hna_local_free(bat_priv);
 	hna_global_free(bat_priv);

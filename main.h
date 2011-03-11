@@ -36,7 +36,7 @@
 #define JITTER 20
 #define TTL 50			  /* Time To Live of broadcast messages */
 
-#define PURGE_TIMEOUT 200	/* purge originators after time in seconds if no
+#define PURGE_TIMEOUT 20	/* purge originators after time in seconds if no
 				   * valid packet comes in -> TODO: check
 				   * influence on TQ_LOCAL_WINDOW_SIZE */
 #define LOCAL_HNA_TIMEOUT 3600 /* in seconds */

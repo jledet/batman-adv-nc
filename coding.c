@@ -1,10 +1,28 @@
 #include "main.h"
 #include "coding.h"
+#include "hash.h"
+
+static void purge_decoding(struct work_struct *work);
+
+static void start_coding_timer(struct bat_priv *bat_priv)
+{
+	INIT_DELAYED_WORK(&bat_priv->decoding_work, purge_decoding);
+	queue_delayed_work(bat_event_workqueue, &bat_priv->decoding_work, 1 * HZ);
+}
 
 int coding_init(struct bat_priv *bat_priv)
 {
+	if (bat_priv->decoding_hash)
+		return 0;
 
-	return 1;
+	bat_priv->decoding_hash = hash_new(1024);
+
+	if (!bat_priv->decoding_hash)
+		return -1;
+
+	start_coding_timer(bat_priv);
+
+	return 0;
 }
 
 int orig_has_neighbor(struct orig_node *orig_node,
@@ -66,4 +84,128 @@ int receive_coding_packet(struct bat_priv *bat_priv,
 {
 
 	return -1;
+}
+
+uint16_t get_decoding_id(struct bat_priv *bat_priv)
+{
+	return (uint16_t)atomic_inc_return(&bat_priv->last_decoding_id);
+}
+
+void add_decoding_skb(struct bat_priv *bat_priv, struct sk_buff *skb)
+{
+	int hash_added;
+	struct unicast_packet *unicast_packet = 
+		(struct unicast_packet *)skb->data;
+	struct sk_buff *decoding_skb = skb_clone(skb, GFP_ATOMIC);
+
+	struct decoding_packet *decoding_packet = 
+		kmalloc(sizeof(struct decoding_packet), GFP_ATOMIC);
+
+	atomic_set(&decoding_packet->refcount, 1);
+	decoding_packet->timestamp = jiffies;
+	decoding_packet->id = unicast_packet->decoding_id;
+	decoding_packet->skb = decoding_skb;
+	
+	hash_added = hash_add(bat_priv->decoding_hash, compare_decoding,
+			      choose_decoding, decoding_packet, &decoding_packet->hash_entry);
+	if (hash_added < 0)
+		goto free_decoding_packet;
+
+	return;
+
+free_decoding_packet:
+	dev_kfree_skb(decoding_skb);
+	kfree(decoding_packet);
+}
+
+void decoding_packet_free_rcu(struct rcu_head *rcu)
+{
+	struct decoding_packet *decoding_packet;
+	decoding_packet = container_of(rcu, struct decoding_packet, rcu);
+
+	dev_kfree_skb(decoding_packet->skb);
+	kfree(decoding_packet);
+}
+
+void decoding_packet_free_ref(struct decoding_packet *decoding_packet)
+{
+	if (atomic_dec_and_test(&decoding_packet->refcount))
+		call_rcu(&decoding_packet->rcu, decoding_packet_free_rcu);
+}
+
+static inline int purge_decoding_packet(struct decoding_packet *decoding_packet)
+{
+	return time_is_before_jiffies(
+			decoding_packet->timestamp + DECODING_TIMEOUT * HZ);
+}
+
+static void _purge_decoding(struct bat_priv *bat_priv)
+{
+	struct hashtable_t *hash = bat_priv->decoding_hash;
+	struct hlist_node *node, *node_tmp;
+	struct hlist_head *head;
+	spinlock_t *list_lock; /* spinlock to protect write access */
+	struct decoding_packet *decoding_packet;
+	int i;
+
+	if (!hash)
+		return;
+
+	for (i = 0; i < hash->size; i++) {
+		head = &hash->table[i];
+		list_lock = &hash->list_locks[i];
+
+		spin_lock_bh(list_lock);
+		hlist_for_each_entry_safe(decoding_packet, node, node_tmp,
+					  head, hash_entry) {
+			if (purge_decoding_packet(decoding_packet)) {
+				hlist_del_rcu(node);
+				decoding_packet_free_ref(decoding_packet);
+			}
+		}
+		spin_unlock_bh(list_lock);
+	}
+}
+
+static void purge_decoding(struct work_struct *work)
+{
+	struct delayed_work *delayed_work =
+		container_of(work, struct delayed_work, work);
+	struct bat_priv *bat_priv =
+		container_of(delayed_work, struct bat_priv, decoding_work);
+
+	printk(KERN_DEBUG "Removing old decodings %p\n", bat_priv);
+	_purge_decoding(bat_priv);
+	start_coding_timer(bat_priv);
+}
+
+void coding_free(struct bat_priv *bat_priv)
+{
+	struct hashtable_t *hash = bat_priv->decoding_hash;
+	struct hlist_node *node, *node_tmp;
+	struct hlist_head *head;
+	spinlock_t *list_lock; /* spinlock to protect write access */
+	struct decoding_packet *decoding_packet;
+	int i;
+
+	if (!hash)
+		return;
+
+	printk(KERN_DEBUG "Starting decoding_packet deletion\n");
+	cancel_delayed_work_sync(&bat_priv->decoding_work);
+
+	for (i = 0; i < hash->size; i++) {
+		head = &hash->table[i];
+		list_lock = &hash->list_locks[i];
+
+		spin_lock_bh(list_lock);
+		hlist_for_each_entry_safe(decoding_packet, node, node_tmp,
+					  head, hash_entry) {
+			hlist_del_rcu(node);
+			decoding_packet_free_ref(decoding_packet);
+		}
+		spin_unlock_bh(list_lock);
+	}
+
+	hash_destroy(hash);
 }

@@ -1562,7 +1562,7 @@ int recv_coding_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 	ethhdr = (struct ethhdr *)skb_mac_header(skb);
 
 	/* Verify frame is destined for us */
-	if (!is_my_mac(ethhdr->h_dest) && !is_my_mac(coding_packet->dest))
+	if (!is_my_mac(ethhdr->h_dest) && !is_my_mac(coding_packet->second_dest))
 		return NET_RX_DROP;
 
 	if (receive_coding_packet(bat_priv, coding_packet, hdr_size) < 0)

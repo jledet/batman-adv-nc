@@ -102,6 +102,7 @@ struct unicast_packet {
 	uint8_t  version;  /* batman version field */
 	uint8_t  dest[6];
 	uint8_t  ttl;
+	uint16_t decoding_id;
 } __packed;
 
 struct unicast_frag_packet {
@@ -138,8 +139,11 @@ struct vis_packet {
 struct coding_packet {
 	uint8_t packet_type;
 	uint8_t version;
-	uint8_t dest[6];
-	uint32_t uid;
+	uint8_t decoder[6];
+	uint16_t first_id;
+	uint16_t second_id;
+	uint8_t second_dest[6];
+	uint8_t ttl;
 } __packed;
 
 #endif /* _NET_BATMAN_ADV_PACKET_H_ */

@@ -140,6 +140,14 @@ struct coding_node {
 	struct orig_node *orig_node;
 };
 
+struct decoding_packet {
+	struct hlist_node hash_entry;
+	unsigned long timestamp;
+	struct rcu_head rcu;
+	atomic_t refcount;
+	uint16_t id;
+	struct sk_buff *skb;
+};
 
 struct bat_priv {
 	atomic_t mesh_state;
@@ -187,6 +195,9 @@ struct bat_priv {
 	struct delayed_work vis_work;
 	struct gw_node __rcu *curr_gw;  /* rcu protected pointer */
 	struct vis_info *my_vis_info;
+	struct hashtable_t *decoding_hash;
+	struct delayed_work decoding_work;
+	atomic_t last_decoding_id;
 };
 
 struct socket_client {
