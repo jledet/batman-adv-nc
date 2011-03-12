@@ -110,6 +110,7 @@ static inline int send_coding_packet(struct coding_packet *coding_packet)
 
 void coding_send_packet(struct coding_packet *coding_packet)
 {
+	printk(KERN_DEBUG "WOMBAT: Sending hold packet\n");
 	route_unicast_packet(coding_packet->skb, coding_packet->hard_iface);
 }
 
