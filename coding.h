@@ -1,7 +1,8 @@
 #ifndef _NET_BATMAN_ADV_CODING_H
 #define _NET_BATMAN_ADV_CODING_H
 
-#define DECODING_TIMEOUT 1
+#define DECODING_TIMEOUT 1 /* seconds */
+#define CODING_HOLD 100 /* milliseconds */
 
 int coding_init(struct bat_priv *bat_priv);
 void coding_free(struct bat_priv *bat_priv);
@@ -11,13 +12,15 @@ void coding_orig_neighbor(struct bat_priv *bat_priv,
 uint16_t get_decoding_id(struct bat_priv *bat_priv);
 int receive_coded_packet(struct bat_priv *bat_priv,
 		struct coded_packet *coded_packet, int hdr_size);
+int add_coding_skb(struct hard_iface *hard_iface, struct sk_buff *skb);
 void add_decoding_skb(struct hard_iface *hard_iface, struct sk_buff *skb);
 
 
 static inline void generate_key(struct coding_packet *decoding_packet,
 		uint8_t *data1)
 {
-	struct ethhdr *ethhdr = (struct ethhdr *)skb_mac_header(decoding_packet->skb);
+	struct ethhdr *ethhdr =
+		(struct ethhdr *)skb_mac_header(decoding_packet->skb);
 	int i;
 
 	data1[0] = (uint8_t)decoding_packet->id;
@@ -27,7 +30,7 @@ static inline void generate_key(struct coding_packet *decoding_packet,
 	}
 }
 
-static inline int choose_decoding(void *data, int32_t size)
+static inline int choose_coding(void *data, int32_t size)
 {
 	uint8_t key[ETH_ALEN];
 	uint32_t hash = 0;
@@ -49,7 +52,7 @@ static inline int choose_decoding(void *data, int32_t size)
 }
 
 /* returns 1 if they are the same originator */
-static inline int compare_decoding(struct hlist_node *node, void *data2)
+static inline int compare_coding(struct hlist_node *node, void *data2)
 {
 	struct coding_packet *decoding_packet =
 		container_of(node, struct coding_packet, hash_entry);

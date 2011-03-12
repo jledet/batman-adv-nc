@@ -145,8 +145,10 @@ struct coding_packet {
 	struct rcu_head rcu;
 	atomic_t refcount;
 	unsigned long timestamp;
+	struct timespec timespec;
 	uint16_t id;
 	struct sk_buff *skb;
+	struct hard_iface *hard_iface;
 };
 
 struct bat_priv {
@@ -196,7 +198,10 @@ struct bat_priv {
 	struct gw_node __rcu *curr_gw;  /* rcu protected pointer */
 	struct vis_info *my_vis_info;
 	struct hashtable_t *decoding_hash;
+	struct hashtable_t *coding_hash;
+	atomic_t coding_hash_count;
 	struct delayed_work decoding_work;
+	struct task_struct *coding_thread;
 	atomic_t last_decoding_id;
 };
 

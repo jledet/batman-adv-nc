@@ -113,6 +113,7 @@
 #include <linux/slab.h>
 #include <net/sock.h>		/* struct sock */
 #include <linux/jiffies.h>
+#include <linux/wait.h>
 #include <linux/seq_file.h>
 #include "compat.h"
 
