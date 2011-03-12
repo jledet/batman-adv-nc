@@ -140,13 +140,11 @@ struct coding_node {
 	struct orig_node *orig_node;
 };
 
-struct decoding_packet {
+struct coding_packet {
 	struct hlist_node hash_entry;
 	struct rcu_head rcu;
 	atomic_t refcount;
 	unsigned long timestamp;
-	uint8_t source[6];
-	uint8_t dest[6];
 	uint16_t id;
 	struct sk_buff *skb;
 };

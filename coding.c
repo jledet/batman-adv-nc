@@ -23,6 +23,7 @@ int coding_init(struct bat_priv *bat_priv)
 
 	start_coding_timer(bat_priv);
 
+
 	return 0;
 }
 
@@ -80,8 +81,8 @@ void coding_orig_neighbor(struct bat_priv *bat_priv,
 	}
 }
 
-int receive_coding_packet(struct bat_priv *bat_priv,
-		struct coding_packet *coding_packet, int hdr_size)
+int receive_coded_packet(struct bat_priv *bat_priv,
+		struct coded_packet *coded_packet, int hdr_size)
 {
 
 	return -1;
@@ -93,33 +94,28 @@ uint16_t get_decoding_id(struct bat_priv *bat_priv)
 	return (uint16_t)atomic_inc_return(&bat_priv->last_decoding_id);
 }
 
-void add_decoding_skb(struct hard_iface *hard_iface, struct sk_buff *skb,
-		uint8_t *packet_data)
+void add_decoding_skb(struct hard_iface *hard_iface, struct sk_buff *skb)
 {
 	int hash_added;
 	struct bat_priv *bat_priv = netdev_priv(hard_iface->soft_iface);
 	struct unicast_packet *unicast_packet =
-		(struct unicast_packet *)packet_data;
+		(struct unicast_packet *)skb_network_header(skb);
 	struct sk_buff *decoding_skb;
-	struct decoding_packet *decoding_packet;
+	struct coding_packet *decoding_packet;
 
 	/* We only handle unicast packets */
-	if (unicast_packet->packet_type != BAT_UNICAST) {
+	if (unicast_packet->packet_type != BAT_UNICAST)
 		return;
-	}
 
 	decoding_skb = skb_clone(skb, GFP_ATOMIC);
+
 	if (!decoding_skb)
 		return;
-	if (skb_linearize(decoding_skb) < 0)
-		goto free_skb;
 
-	decoding_packet = kzalloc(sizeof(struct decoding_packet), GFP_ATOMIC);
+	decoding_packet = kzalloc(sizeof(struct coding_packet), GFP_ATOMIC);
+
 	if (!decoding_packet)
 		goto free_skb;
-
-	printk(KERN_DEBUG "Adding decoding_packet with id %hu\n",
-			unicast_packet->decoding_id);
 
 	atomic_set(&decoding_packet->refcount, 1);
 	decoding_packet->timestamp = jiffies;
@@ -143,21 +139,20 @@ free_skb:
 
 void decoding_packet_free_rcu(struct rcu_head *rcu)
 {
-	struct decoding_packet *decoding_packet;
-	decoding_packet = container_of(rcu, struct decoding_packet, rcu);
+	struct coding_packet *decoding_packet;
+	decoding_packet = container_of(rcu, struct coding_packet, rcu);
 
-	printk(KERN_DEBUG "WOMBAT: Freeing old skb\n");
 	dev_kfree_skb(decoding_packet->skb);
 	kfree(decoding_packet);
 }
 
-void decoding_packet_free_ref(struct decoding_packet *decoding_packet)
+void decoding_packet_free_ref(struct coding_packet *decoding_packet)
 {
 	if (atomic_dec_and_test(&decoding_packet->refcount))
 		call_rcu(&decoding_packet->rcu, decoding_packet_free_rcu);
 }
 
-static inline int purge_decoding_packet(struct decoding_packet *decoding_packet)
+static inline int purge_decoding_packet(struct coding_packet *decoding_packet)
 {
 	return time_is_before_jiffies(
 			decoding_packet->timestamp + DECODING_TIMEOUT * HZ);
@@ -169,8 +164,8 @@ static void _purge_decoding(struct bat_priv *bat_priv)
 	struct hlist_node *node, *node_tmp;
 	struct hlist_head *head;
 	spinlock_t *list_lock; /* spinlock to protect write access */
-	struct decoding_packet *decoding_packet;
-	int i;
+	struct coding_packet *decoding_packet;
+	int i, j=0;
 
 	if (!hash)
 		return;
@@ -186,9 +181,11 @@ static void _purge_decoding(struct bat_priv *bat_priv)
 				hlist_del_rcu(node);
 				decoding_packet_free_ref(decoding_packet);
 			}
+			j++;
 		}
 		spin_unlock_bh(list_lock);
 	}
+	printk(KERN_DEBUG "WOMBAT: packets: %u\n", j);
 }
 
 static void purge_decoding(struct work_struct *work)
@@ -208,13 +205,13 @@ void coding_free(struct bat_priv *bat_priv)
 	struct hlist_node *node, *node_tmp;
 	struct hlist_head *head;
 	spinlock_t *list_lock; /* spinlock to protect write access */
-	struct decoding_packet *decoding_packet;
+	struct coding_packet *decoding_packet;
 	int i;
 
 	if (!hash)
 		return;
 
-	printk(KERN_DEBUG "Starting decoding_packet deletion\n");
+	printk(KERN_DEBUG "Starting coding_packet deletion\n");
 	cancel_delayed_work_sync(&bat_priv->decoding_work);
 
 	for (i = 0; i < hash->size; i++) {

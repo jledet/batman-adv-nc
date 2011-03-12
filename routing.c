@@ -1254,17 +1254,17 @@ static int check_unicast_packet(struct sk_buff *skb, int hdr_size)
 
 	/* drop packet if it has not necessary minimum size */
 	if (unlikely(!pskb_may_pull(skb, hdr_size)))
-		return -1;
+		return -2;
 
 	ethhdr = (struct ethhdr *)skb_mac_header(skb);
 
 	/* packet with unicast indication but broadcast recipient */
 	if (is_broadcast_ether_addr(ethhdr->h_dest))
-		return -1;
+		return -2;
 
 	/* packet with broadcast sender address */
 	if (is_broadcast_ether_addr(ethhdr->h_source))
-		return -1;
+		return -2;
 
 	/* not for me */
 	if (!is_my_mac(ethhdr->h_dest))
@@ -1363,11 +1363,19 @@ int recv_unicast_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 	struct unicast_packet *unicast_packet;
 	int hdr_size = sizeof(struct unicast_packet);
 
-	if (check_unicast_packet(skb, hdr_size) < 0)
+	switch (check_unicast_packet(skb, hdr_size)) {
+	case 0:
+		break;
+
+	case -1:
+		add_decoding_skb(recv_if, skb);
+		/* fall through */
+
+	case -2:
 		return NET_RX_DROP;
+	}
 
 	unicast_packet = (struct unicast_packet *)skb->data;
-
 
 	/* packet for me */
 	if (is_my_mac(unicast_packet->dest)) {
@@ -1545,12 +1553,12 @@ int recv_vis_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 	return NET_RX_DROP;
 }
 
-int recv_coding_packet(struct sk_buff *skb, struct hard_iface *recv_if)
+int recv_coded_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 {
-	struct coding_packet *coding_packet;
+	struct coded_packet *coded_packet;
 	struct ethhdr *ethhdr;
 	struct bat_priv *bat_priv = netdev_priv(recv_if->soft_iface);
-	int hdr_size = sizeof(struct coding_packet);
+	int hdr_size = sizeof(struct coded_packet);
 
 	/* keep skb linear */
 	if (skb_linearize(skb) < 0)
@@ -1559,14 +1567,14 @@ int recv_coding_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 	if (unlikely(!pskb_may_pull(skb, hdr_size)))
 		return NET_RX_DROP;
 
-	coding_packet = (struct coding_packet *)skb->data;
+	coded_packet = (struct coded_packet *)skb->data;
 	ethhdr = (struct ethhdr *)skb_mac_header(skb);
 
 	/* Verify frame is destined for us */
-	if (!is_my_mac(ethhdr->h_dest) && !is_my_mac(coding_packet->second_dest))
+	if (!is_my_mac(ethhdr->h_dest) && !is_my_mac(coded_packet->second_dest))
 		return NET_RX_DROP;
 
-	if (receive_coding_packet(bat_priv, coding_packet, hdr_size) < 0)
+	if (receive_coded_packet(bat_priv, coded_packet, hdr_size) < 0)
 		return NET_RX_DROP;
 
 	return NET_RX_SUCCESS;

@@ -646,8 +646,8 @@ static int batman_skb_recv(struct sk_buff *skb, struct net_device *dev,
 		break;
 
 		/* coded packet */
-	case BAT_CODING:
-		ret = recv_coding_packet(skb, hard_iface);
+	case BAT_CODED:
+		ret = recv_coded_packet(skb, hard_iface);
 	default:
 		ret = NET_RX_DROP;
 	}

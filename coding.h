@@ -9,13 +9,12 @@ void coding_orig_neighbor(struct bat_priv *bat_priv,
 		struct orig_node *orig_node,
 		struct orig_node *neigh_node);
 uint16_t get_decoding_id(struct bat_priv *bat_priv);
-int receive_coding_packet(struct bat_priv *bat_priv,
-		struct coding_packet *coding_packet, int hdr_size);
-void add_decoding_skb(struct hard_iface *hard_iface, struct sk_buff *skb,
-		uint8_t *packet_data);
+int receive_coded_packet(struct bat_priv *bat_priv,
+		struct coded_packet *coded_packet, int hdr_size);
+void add_decoding_skb(struct hard_iface *hard_iface, struct sk_buff *skb);
 
 
-static inline void generate_key(struct decoding_packet *decoding_packet,
+static inline void generate_key(struct coding_packet *decoding_packet,
 		uint8_t *data1)
 {
 	struct ethhdr *ethhdr = (struct ethhdr *)skb_mac_header(decoding_packet->skb);
@@ -34,7 +33,7 @@ static inline int choose_decoding(void *data, int32_t size)
 	uint32_t hash = 0;
 	size_t i;
 	
-	generate_key((struct decoding_packet *)data, key);
+	generate_key((struct coding_packet *)data, key);
 
 	for (i = 0; i < 6; i++) {
 		hash += key[i];
@@ -52,8 +51,8 @@ static inline int choose_decoding(void *data, int32_t size)
 /* returns 1 if they are the same originator */
 static inline int compare_decoding(struct hlist_node *node, void *data2)
 {
-	struct decoding_packet *decoding_packet =
-		container_of(node, struct decoding_packet, hash_entry);
+	struct coding_packet *decoding_packet =
+		container_of(node, struct coding_packet, hash_entry);
 	
 	uint8_t data1[ETH_ALEN];
 	generate_key(decoding_packet, data1);

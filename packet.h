@@ -30,7 +30,7 @@
 #define BAT_BCAST        0x04
 #define BAT_VIS          0x05
 #define BAT_UNICAST_FRAG 0x06
-#define BAT_CODING       0x07
+#define BAT_CODED        0x07
 
 /* this file is included by batctl which needs these defines */
 #define COMPAT_VERSION 12
@@ -136,7 +136,7 @@ struct vis_packet {
 	uint8_t  sender_orig[6]; /* who sent or rebroadcasted this packet */
 } __packed;
 
-struct coding_packet {
+struct coded_packet {
 	uint8_t packet_type;
 	uint8_t version;
 	uint8_t decoder[6];
