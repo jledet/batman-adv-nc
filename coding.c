@@ -99,6 +99,23 @@ int receive_coded_packet(struct bat_priv *bat_priv,
 	return -1;
 }
 
+void coding_packet_free_rcu(struct rcu_head *rcu)
+{
+	struct coding_packet *coding_packet;
+	coding_packet = container_of(rcu, struct coding_packet, rcu);
+
+	if (coding_packet->skb)
+		dev_kfree_skb(coding_packet->skb);
+
+	kfree(coding_packet);
+}
+
+void coding_packet_free_ref(struct coding_packet *coding_packet)
+{
+	if (atomic_dec_and_test(&coding_packet->refcount))
+		call_rcu(&coding_packet->rcu, coding_packet_free_rcu);
+}
+
 static inline int send_coding_packet(struct coding_packet *coding_packet)
 {
 	struct timespec now = current_kernel_time();
@@ -112,6 +129,8 @@ void coding_send_packet(struct coding_packet *coding_packet)
 {
 	printk(KERN_DEBUG "WOMBAT: Sending hold packet\n");
 	route_unicast_packet(coding_packet->skb, coding_packet->hard_iface);
+	coding_packet->skb = NULL;
+	coding_packet_free_ref(coding_packet);
 }
 
 void work_coding_packets(struct bat_priv *bat_priv)
@@ -134,6 +153,7 @@ void work_coding_packets(struct bat_priv *bat_priv)
 		hlist_for_each_entry_safe(coding_packet, node, node_tmp,
 					  head, hash_entry) {
 			if (send_coding_packet(coding_packet))
+				hlist_del_rcu(node);
 				coding_send_packet(coding_packet);
 		}
 		spin_unlock_bh(list_lock);
@@ -240,21 +260,6 @@ free_skb:
 	dev_kfree_skb(decoding_skb);
 }
 
-void coding_packet_free_rcu(struct rcu_head *rcu)
-{
-	struct coding_packet *coding_packet;
-	coding_packet = container_of(rcu, struct coding_packet, rcu);
-
-	dev_kfree_skb(coding_packet->skb);
-	kfree(coding_packet);
-}
-
-void coding_packet_free_ref(struct coding_packet *coding_packet)
-{
-	if (atomic_dec_and_test(&coding_packet->refcount))
-		call_rcu(&coding_packet->rcu, coding_packet_free_rcu);
-}
-
 static inline int purge_decoding_packet(struct coding_packet *decoding_packet)
 {
 	return time_is_before_jiffies(
@@ -283,6 +288,7 @@ static void _purge_decoding(struct bat_priv *bat_priv)
 			if (purge_decoding_packet(decoding_packet)) {
 				hlist_del_rcu(node);
 				coding_packet_free_ref(decoding_packet);
+				atomic_dec(&bat_priv->coding_hash_count);
 			}
 		}
 		spin_unlock_bh(list_lock);
