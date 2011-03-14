@@ -151,9 +151,10 @@ void work_coding_packets(struct bat_priv *bat_priv)
 		spin_lock_bh(list_lock);
 		hlist_for_each_entry_safe(coding_packet, node, node_tmp,
 					  head, hash_entry) {
-			if (send_coding_packet(coding_packet))
+			if (send_coding_packet(coding_packet)) {
 				hlist_del_rcu(node);
 				coding_send_packet(coding_packet);
+			}
 		}
 		spin_unlock_bh(list_lock);
 	}
