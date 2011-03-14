@@ -152,6 +152,7 @@ void work_coding_packets(struct bat_priv *bat_priv)
 	if (!hash)
 		return;
 
+	printk(KERN_DEBUG "WOMBAT: Traversing list\n");
 	for (i = 0; i < hash->size; i++) {
 		head = &hash->table[i];
 		list_lock = &hash->list_locks[i];
@@ -160,6 +161,7 @@ void work_coding_packets(struct bat_priv *bat_priv)
 		hlist_for_each_entry_safe(coding_packet, node, node_tmp,
 					  head, hash_entry) {
 			if (send_coding_packet(coding_packet))
+				printk(KERN_DEBUG "WOMBAT: Found hold packet\n");
 				hlist_del_rcu(node);
 				coding_send_packet(coding_packet);
 				sending = 1;
