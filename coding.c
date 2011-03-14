@@ -104,10 +104,8 @@ void coding_packet_free_rcu(struct rcu_head *rcu)
 	struct coding_packet *coding_packet;
 	coding_packet = container_of(rcu, struct coding_packet, rcu);
 
-	if (coding_packet->skb) {
-		printk(KERN_DEBUG "WOMBAT: Freeing skb\n");
+	if (coding_packet->skb)
 		dev_kfree_skb(coding_packet->skb);
-	}
 
 	kfree(coding_packet);
 }
@@ -141,7 +139,7 @@ void work_coding_packets(struct bat_priv *bat_priv)
 	struct hlist_head *head;
 	spinlock_t *list_lock; /* spinlock to protect write access */
 	struct coding_packet *coding_packet;
-	int i, sending = 0;
+	int i;
 
 	if (!hash)
 		return;
@@ -157,12 +155,9 @@ void work_coding_packets(struct bat_priv *bat_priv)
 				printk(KERN_DEBUG "WOMBAT: Found hold packet\n");
 				hlist_del_rcu(node);
 				coding_send_packet(coding_packet);
-				sending = 1;
 		}
 		spin_unlock_bh(list_lock);
 	}
-	if (sending)
-		printk(KERN_DEBUG "WOMBAT: List traversed\n");
 }
 
 int coding_thread(void *data)
