@@ -106,8 +106,10 @@ void coding_packet_free_rcu(struct rcu_head *rcu)
 
 	printk(KERN_DEBUG "WOMBAT: Freeing coding_packet\n");
 
-	if (coding_packet->skb)
+	if (coding_packet->skb) {
+		printk(KERN_DEBUG "WOMBAT: Freeing skb\n");
 		dev_kfree_skb(coding_packet->skb);
+	}
 
 	kfree(coding_packet);
 	printk(KERN_DEBUG "WOMBAT: Coding_packet freed\n");
@@ -135,6 +137,7 @@ void coding_send_packet(struct coding_packet *coding_packet)
 	printk(KERN_DEBUG "WOMBAT: packet sent\n");
 	coding_packet->skb = NULL;
 	coding_packet_free_ref(coding_packet);
+	printk(KERN_DEBUG "WOMBAT: Exiting coding_sent_packet()\n");
 }
 
 void work_coding_packets(struct bat_priv *bat_priv)
@@ -144,7 +147,7 @@ void work_coding_packets(struct bat_priv *bat_priv)
 	struct hlist_head *head;
 	spinlock_t *list_lock; /* spinlock to protect write access */
 	struct coding_packet *coding_packet;
-	int i;
+	int i, sending = 0;
 
 	if (!hash)
 		return;
@@ -159,9 +162,12 @@ void work_coding_packets(struct bat_priv *bat_priv)
 			if (send_coding_packet(coding_packet))
 				hlist_del_rcu(node);
 				coding_send_packet(coding_packet);
+				sending = 1;
 		}
 		spin_unlock_bh(list_lock);
 	}
+	if (sending)
+		printk(KERN_DEBUG "WOMBAT: List traversed\n");
 }
 
 int coding_thread(void *data)
