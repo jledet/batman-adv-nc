@@ -152,7 +152,6 @@ void work_coding_packets(struct bat_priv *bat_priv)
 		hlist_for_each_entry_safe(coding_packet, node, node_tmp,
 					  head, hash_entry) {
 			if (send_coding_packet(coding_packet))
-				printk(KERN_DEBUG "WOMBAT: Found hold packet\n");
 				hlist_del_rcu(node);
 				coding_send_packet(coding_packet);
 		}
@@ -213,7 +212,6 @@ free_coding_packet:
 
 uint16_t get_decoding_id(struct bat_priv *bat_priv)
 {
-	printk(KERN_DEBUG "WOMBAT: Increment decoding_id\n");
 	return (uint16_t)atomic_inc_return(&bat_priv->last_decoding_id);
 }
 
