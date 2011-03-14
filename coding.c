@@ -104,10 +104,13 @@ void coding_packet_free_rcu(struct rcu_head *rcu)
 	struct coding_packet *coding_packet;
 	coding_packet = container_of(rcu, struct coding_packet, rcu);
 
+	printk(KERN_DEBUG "WOMBAT: Freeing coding_packet\n");
+
 	if (coding_packet->skb)
 		dev_kfree_skb(coding_packet->skb);
 
 	kfree(coding_packet);
+	printk(KERN_DEBUG "WOMBAT: Coding_packet freed\n");
 }
 
 void coding_packet_free_ref(struct coding_packet *coding_packet)
@@ -129,6 +132,7 @@ void coding_send_packet(struct coding_packet *coding_packet)
 {
 	printk(KERN_DEBUG "WOMBAT: Sending hold packet\n");
 	route_unicast_packet(coding_packet->skb, coding_packet->hard_iface);
+	printk(KERN_DEBUG "WOMBAT: packet sent\n");
 	coding_packet->skb = NULL;
 	coding_packet_free_ref(coding_packet);
 }
