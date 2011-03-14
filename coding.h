@@ -16,27 +16,11 @@ int add_coding_skb(struct hard_iface *hard_iface, struct sk_buff *skb);
 void add_decoding_skb(struct hard_iface *hard_iface, struct sk_buff *skb);
 
 
-static inline void generate_key(struct coding_packet *decoding_packet,
-		uint8_t *data1)
-{
-	struct ethhdr *ethhdr =
-		(struct ethhdr *)skb_mac_header(decoding_packet->skb);
-	int i;
-
-	data1[0] = (uint8_t)decoding_packet->id;
-	data1[1] = (uint8_t)*(&decoding_packet->id + 1);
-	for (i = 2; i < ETH_ALEN; ++i) {
-		data1[i] = ethhdr->h_dest[i] ^ ethhdr->h_source[i];
-	}
-}
-
 static inline int choose_coding(void *data, int32_t size)
 {
-	uint8_t key[ETH_ALEN];
+	unsigned char *key = data;
 	uint32_t hash = 0;
 	size_t i;
-	
-	generate_key((struct coding_packet *)data, key);
 
 	for (i = 0; i < 6; i++) {
 		hash += key[i];
@@ -54,13 +38,51 @@ static inline int choose_coding(void *data, int32_t size)
 /* returns 1 if they are the same originator */
 static inline int compare_coding(struct hlist_node *node, void *data2)
 {
-	struct coding_packet *decoding_packet =
+	struct coding_packet *coding_packet1 =
 		container_of(node, struct coding_packet, hash_entry);
-	
-	uint8_t data1[ETH_ALEN];
-	generate_key(decoding_packet, data1);
+	struct coding_packet *coding_packet2 =
+		(struct coding_packet *)data2;
+	struct ethhdr *eth1 =
+		(struct ethhdr *)skb_mac_header(coding_packet1->skb);
+	struct ethhdr *eth2 =
+		(struct ethhdr *)skb_mac_header(coding_packet2->skb);
 
-	return (memcmp(data1, data2, ETH_ALEN) == 0 ? 1 : 0);
+	if (coding_packet1->id != coding_packet2->id)
+		return 0;
+
+	if (memcmp(eth1->h_dest, eth2->h_dest, ETH_ALEN))
+		return 0;
+
+	if (memcmp(eth1->h_source, eth2->h_source, ETH_ALEN))
+		return 0;
+
+	return 1;
+}
+
+static inline void generate_key(struct coding_packet *decoding_packet,
+		uint8_t *data1)
+{
+	struct ethhdr *ethhdr =
+		(struct ethhdr *)skb_mac_header(decoding_packet->skb);
+	int i;
+
+	data1[0] = (uint8_t)decoding_packet->id;
+	data1[1] = (uint8_t)*(&decoding_packet->id + 1);
+	for (i = 2; i < ETH_ALEN; ++i)
+		data1[i] = ethhdr->h_dest[i] ^ ethhdr->h_source[i];
+}
+
+static inline int choose_decoding(void *data, int32_t size)
+{
+	uint8_t key[ETH_ALEN];
+	generate_key((struct coding_packet *)data, key);
+
+	return choose_coding(key, size);
+}
+
+static inline int compare_decoding(struct hlist_node *node, void *data2)
+{
+	return compare_coding(node, data2);
 }
 
 static inline void pretty_mac(char *asc, char *addr)
@@ -69,5 +91,4 @@ static inline void pretty_mac(char *asc, char *addr)
 			addr[0], addr[1], addr[2],
 			addr[3], addr[4], addr[5]);
 }
-
 #endif

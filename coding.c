@@ -1,6 +1,7 @@
 #include "main.h"
 #include "coding.h"
 #include "routing.h"
+#include "originator.h"
 #include "hash.h"
 
 static void purge_decoding(struct work_struct *work);
@@ -172,6 +173,20 @@ int coding_thread(void *data)
 	return 0;
 }
 
+int send_coded_packet(struct hard_iface *hard_iface, struct sk_buff *skb)
+{
+	struct bat_priv *bat_priv = netdev_priv(hard_iface->soft_iface);
+	struct unicast_packet *unicast_packet =
+		(struct unicast_packet *)skb->data;
+	struct orig_node *orig_node =
+		get_orig_node(bat_priv, unicast_packet->dest);
+
+	if (!orig_node)
+		return -1;
+
+	return 0;
+}
+
 int add_coding_skb(struct hard_iface *hard_iface, struct sk_buff *skb)
 {
 	int hash_added;
@@ -244,8 +259,8 @@ void add_decoding_skb(struct hard_iface *hard_iface, struct sk_buff *skb)
 	decoding_packet->id = unicast_packet->decoding_id;
 	decoding_packet->skb = decoding_skb;
 
-	hash_added = hash_add(bat_priv->decoding_hash, compare_coding,
-			      choose_coding, decoding_packet,
+	hash_added = hash_add(bat_priv->decoding_hash, compare_decoding,
+			      choose_decoding, decoding_packet,
 			      &decoding_packet->hash_entry);
 	if (hash_added < 0)
 		goto free_decoding_packet;

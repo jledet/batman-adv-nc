@@ -137,13 +137,18 @@ struct vis_packet {
 } __packed;
 
 struct coded_packet {
-	uint8_t packet_type;
-	uint8_t version;
-	uint8_t decoder[6];
+	uint8_t  packet_type;
+	uint8_t  version;
+	/* uint8_t  first_dest[6]; - saved in mac header destination */
+	uint8_t  first_orig_dest[6];
+	uint8_t  first_source[6];
 	uint16_t first_id;
+	uint8_t  first_ttl;
+	uint8_t  second_dest[6];
+	uint8_t  second_source[6];
+	uint8_t  second_orig_dest[6];
 	uint16_t second_id;
-	uint8_t second_dest[6];
-	uint8_t ttl;
+	uint8_t  second_ttl;
 } __packed;
 
 #endif /* _NET_BATMAN_ADV_PACKET_H_ */
