@@ -12,7 +12,8 @@ void coding_orig_neighbor(struct bat_priv *bat_priv,
 uint16_t get_decoding_id(struct bat_priv *bat_priv);
 int receive_coded_packet(struct bat_priv *bat_priv,
 		struct coded_packet *coded_packet, int hdr_size);
-int add_coding_skb(struct hard_iface *hard_iface, struct sk_buff *skb);
+int add_coding_skb(struct sk_buff *skb, struct neigh_node *neigh_node,
+		struct ethhdr *ethhdr);
 void add_decoding_skb(struct hard_iface *hard_iface, struct sk_buff *skb);
 
 

@@ -1,6 +1,6 @@
 #include "main.h"
 #include "coding.h"
-#include "routing.h"
+#include "send.h"
 #include "originator.h"
 #include "hash.h"
 
@@ -48,7 +48,7 @@ int orig_has_neighbor(struct orig_node *orig_node,
 
 	rcu_read_lock();
 	hlist_for_each_entry_rcu(tmp_coding_node, node,
-				 &orig_node->coding_list, list) {
+				 &orig_node->in_coding_list, list) {
 		if (compare_eth(tmp_coding_node->addr,
 				neigh_orig_node->orig)) {
 			ret = 1;
@@ -72,11 +72,15 @@ int add_coding_node(struct orig_node *orig_node,
 	memcpy(coding_node->addr, neigh_orig_node->orig, ETH_ALEN);
 	coding_node->orig_node = neigh_orig_node;
 
-	atomic_set(&coding_node->refcount, 1);
+	atomic_set(&coding_node->refcount, 2);
 
-	spin_lock_bh(&orig_node->coding_list_lock);
-	hlist_add_head_rcu(&coding_node->list, &orig_node->coding_list);
-	spin_unlock_bh(&orig_node->coding_list_lock);
+	spin_lock_bh(&orig_node->in_coding_list_lock);
+	hlist_add_head_rcu(&coding_node->list, &orig_node->in_coding_list);
+	spin_unlock_bh(&orig_node->in_coding_list_lock);
+
+	spin_lock_bh(&orig_node->out_coding_list_lock);
+	hlist_add_head_rcu(&coding_node->list, &orig_node->out_coding_list);
+	spin_unlock_bh(&orig_node->out_coding_list_lock);
 
 	return 0;
 }
@@ -128,7 +132,8 @@ static inline int send_coding_packet(struct coding_packet *coding_packet)
 
 void coding_send_packet(struct coding_packet *coding_packet)
 {
-	route_unicast_packet(coding_packet->skb, coding_packet->hard_iface);
+	send_skb_packet(coding_packet->skb, coding_packet->hard_iface,
+			coding_packet->next_hop);
 	coding_packet->skb = NULL;
 	coding_packet_free_ref(coding_packet);
 }
@@ -173,24 +178,81 @@ int coding_thread(void *data)
 	return 0;
 }
 
-int send_coded_packet(struct hard_iface *hard_iface, struct sk_buff *skb)
+inline int source_dest_macth(struct coding_packet *coding_packet,
+		struct ethhdr *ethhdr)
 {
-	struct bat_priv *bat_priv = netdev_priv(hard_iface->soft_iface);
-	struct unicast_packet *unicast_packet =
-		(struct unicast_packet *)skb->data;
-	struct orig_node *orig_node =
-		get_orig_node(bat_priv, unicast_packet->dest);
+	if (compare_eth(coding_packet->next_hop, ethhdr->h_source) &&
+			compare_eth(coding_packet->prev_hop,
+				ethhdr->h_dest))
+		return 1;
+	else
+		return 0;
+}
 
-	if (!orig_node)
-		return -1;
+struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
+		struct coding_node *decoding_node, struct ethhdr *ethhdr)
+{
+	struct hashtable_t *hash = bat_priv->coding_hash;
+	struct hlist_node *node, *p_node, *p_node_tmp;
+	struct orig_node *orig_node = get_orig_node(bat_priv, ethhdr->h_source);
+	struct coding_node *coding_node;
+	struct coding_packet *coding_packet;
+	spinlock_t *lock;
+	int index, i;
+	uint8_t hash_key[ETH_ALEN];
+
+	rcu_read_lock();
+	hlist_for_each_entry_rcu(coding_node, node,
+			&orig_node->out_coding_list, list) {
+		/* Create almost unique path key */
+		for (i = 0; i < ETH_ALEN; ++i)
+			hash_key[i] =
+				coding_node->addr[i] ^ decoding_node->addr[i];
+		index = choose_coding(hash_key, hash->size);
+		lock = &hash->list_locks[index];
+
+		spin_lock_bh(lock);
+		hlist_for_each_entry_safe(coding_packet, p_node, p_node_tmp,
+				&hash->table[index], hash_entry) {
+			if (source_dest_macth(coding_packet, ethhdr))
+				printk(KERN_DEBUG "WOMBAT: Coding possibility found!\n");
+		}
+		spin_unlock_bh(lock);
+	}
+	rcu_read_unlock();
+
+	return NULL;
+}
+
+
+int send_coded_packet(struct sk_buff *skb, struct neigh_node *neigh_node,
+		struct ethhdr *ethhdr)
+{
+	struct bat_priv *bat_priv =
+		netdev_priv(neigh_node->if_incoming->soft_iface);
+	struct hlist_node *node;
+	struct orig_node *orig_node = neigh_node->orig_node;
+	struct coding_node *coding_node;
+
+	/* for neighbor of orig_node */
+	rcu_read_lock();
+	hlist_for_each_entry_rcu(coding_node, node,
+			&orig_node->in_coding_list, list) {
+		find_coding_packet(bat_priv, coding_node, ethhdr);
+	}
+	rcu_read_unlock();
 
 	return 0;
 }
 
-int add_coding_skb(struct hard_iface *hard_iface, struct sk_buff *skb)
+int add_coding_skb(struct sk_buff *skb, struct neigh_node *neigh_node,
+	struct ethhdr *ethhdr)
 {
 	int hash_added;
-	struct bat_priv *bat_priv = netdev_priv(hard_iface->soft_iface);
+	int coded = 0, i;
+	uint8_t hash_key[ETH_ALEN];
+	struct bat_priv *bat_priv
+		= netdev_priv(neigh_node->if_incoming->soft_iface);
 	struct unicast_packet *unicast_packet =
 		(struct unicast_packet *)skb_network_header(skb);
 	struct coding_packet *coding_packet;
@@ -199,20 +261,28 @@ int add_coding_skb(struct hard_iface *hard_iface, struct sk_buff *skb)
 	if (unicast_packet->packet_type != BAT_UNICAST)
 		return NET_RX_DROP;
 
+	coded = send_coded_packet(skb, neigh_node, ethhdr);
+
 	coding_packet = kzalloc(sizeof(struct coding_packet), GFP_ATOMIC);
 
 	if (!coding_packet)
 		return NET_RX_DROP;
 
 	atomic_set(&coding_packet->refcount, 1);
+	memcpy(coding_packet->next_hop, neigh_node->addr, ETH_ALEN);
+	memcpy(coding_packet->prev_hop, ethhdr->h_source, ETH_ALEN);
 	coding_packet->timestamp = jiffies;
 	coding_packet->id = unicast_packet->decoding_id;
 	coding_packet->skb = skb;
-	coding_packet->hard_iface = hard_iface;
+	coding_packet->hard_iface = neigh_node->if_incoming;
 	coding_packet->timespec = current_kernel_time();
 
+	for (i = 0; i < ETH_ALEN; ++i)
+		hash_key[i] = coding_packet->prev_hop[i] ^
+			coding_packet->next_hop[i];
+
 	hash_added = hash_add(bat_priv->coding_hash, compare_coding,
-			      choose_coding, coding_packet,
+			      choose_coding, hash_key,
 			      &coding_packet->hash_entry);
 	if (hash_added < 0)
 		goto free_coding_packet;

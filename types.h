@@ -96,8 +96,10 @@ struct orig_node {
 				      *	 last_bcast_seqno */
 	atomic_t bond_candidates;
 	struct list_head bond_list;
-	struct hlist_head coding_list;
-	spinlock_t coding_list_lock;
+	struct hlist_head in_coding_list;
+	struct hlist_head out_coding_list;
+	spinlock_t in_coding_list_lock;
+	spinlock_t out_coding_list_lock;
 };
 
 struct gw_node {
@@ -141,14 +143,19 @@ struct coding_node {
 };
 
 struct coding_packet {
+	/* Used when coding and decoding packets */
 	struct hlist_node hash_entry;
 	struct rcu_head rcu;
 	atomic_t refcount;
 	unsigned long timestamp;
-	struct timespec timespec;
 	uint16_t id;
 	struct sk_buff *skb;
+
+	/* Only used when coding packets */
+	struct timespec timespec;
 	struct hard_iface *hard_iface;
+	uint8_t next_hop[6];
+	uint8_t prev_hop[6];
 };
 
 struct bat_priv {

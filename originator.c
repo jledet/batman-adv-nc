@@ -146,14 +146,23 @@ static void orig_node_free_rcu(struct rcu_head *rcu)
 
 	spin_unlock_bh(&orig_node->neigh_list_lock);
 
-	/* Remove coding_nodes */
-	spin_lock_bh(&orig_node->coding_list_lock);
+	/* Remove in_coding_nodes */
+	spin_lock_bh(&orig_node->in_coding_list_lock);
 	hlist_for_each_entry_safe(coding_node, node, node_tmp,
-				&orig_node->coding_list, list) {
+				&orig_node->in_coding_list, list) {
 		hlist_del_rcu(&coding_node->list);
 		coding_node_free_ref(coding_node);
 	}
-	spin_unlock_bh(&orig_node->coding_list_lock);
+	spin_unlock_bh(&orig_node->in_coding_list_lock);
+
+	/* Remove out_coding_nodes */
+	spin_lock_bh(&orig_node->out_coding_list_lock);
+	hlist_for_each_entry_safe(coding_node, node, node_tmp,
+				&orig_node->out_coding_list, list) {
+		hlist_del_rcu(&coding_node->list);
+		coding_node_free_ref(coding_node);
+	}
+	spin_unlock_bh(&orig_node->out_coding_list_lock);
 
 	frag_list_free(&orig_node->frag_list);
 	hna_global_del_orig(orig_node->bat_priv, orig_node,
@@ -224,12 +233,14 @@ struct orig_node *get_orig_node(struct bat_priv *bat_priv, uint8_t *addr)
 		return NULL;
 
 	INIT_HLIST_HEAD(&orig_node->neigh_list);
-	INIT_HLIST_HEAD(&orig_node->coding_list);
+	INIT_HLIST_HEAD(&orig_node->in_coding_list);
+	INIT_HLIST_HEAD(&orig_node->out_coding_list);
 	INIT_LIST_HEAD(&orig_node->bond_list);
 	spin_lock_init(&orig_node->ogm_cnt_lock);
 	spin_lock_init(&orig_node->bcast_seqno_lock);
 	spin_lock_init(&orig_node->neigh_list_lock);
-	spin_lock_init(&orig_node->coding_list_lock);
+	spin_lock_init(&orig_node->in_coding_list_lock);
+	spin_lock_init(&orig_node->out_coding_list_lock);
 
 	/* extra reference for return */
 	atomic_set(&orig_node->refcount, 2);
