@@ -228,13 +228,7 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 						in_coding_node->addr) &&
 					compare_eth(coding_packet->next_hop,
 						out_coding_node->addr)) {
-				uint8_t eth1[18], eth2[18];
-
-				pretty_mac(eth1, coding_packet->next_hop);
-				pretty_mac(eth2, ethhdr->h_dest);
-				printk(KERN_DEBUG "WOMBAT: X Coding posibility to:\n");
-				printk(KERN_DEBUG "        %s\n", eth1);
-				printk(KERN_DEBUG "        %s\n", eth2);
+				return coding_packet;
 			}
 
 			/* Will never match */
@@ -257,12 +251,23 @@ int send_coded_packet(struct sk_buff *skb, struct neigh_node *neigh_node,
 	struct hlist_node *node;
 	struct orig_node *orig_node = neigh_node->orig_node;
 	struct coding_node *coding_node;
+	struct coding_packet *coding_packet;
 
 	/* for neighbor of orig_node */
 	rcu_read_lock();
 	hlist_for_each_entry_rcu(coding_node, node,
 			&orig_node->in_coding_list, list) {
-		find_coding_packet(bat_priv, coding_node, ethhdr);
+		coding_packet =
+			find_coding_packet(bat_priv, coding_node, ethhdr);
+		if (coding_packet) {
+			uint8_t eth1[18], eth2[18];
+
+			pretty_mac(eth1, coding_packet->next_hop);
+			pretty_mac(eth2, neigh_node->addr);
+			printk(KERN_DEBUG "WOMBAT: X Coding posibility to:\n");
+			printk(KERN_DEBUG "        %s\n", eth1);
+			printk(KERN_DEBUG "        %s\n", eth2);
+		}
 	}
 	rcu_read_unlock();
 
