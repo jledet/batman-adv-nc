@@ -48,7 +48,7 @@ int orig_has_neighbor(struct orig_node *orig_node,
 
 	rcu_read_lock();
 	hlist_for_each_entry_rcu(tmp_coding_node, node,
-				 &orig_node->in_coding_list, list) {
+				 &orig_node->out_coding_list, list) {
 		if (compare_eth(tmp_coding_node->addr,
 				neigh_orig_node->orig)) {
 			ret = 1;
