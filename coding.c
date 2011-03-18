@@ -181,12 +181,15 @@ int coding_thread(void *data)
 inline int source_dest_macth(struct coding_packet *coding_packet,
 		struct ethhdr *ethhdr)
 {
-	if (compare_eth(coding_packet->next_hop, ethhdr->h_source) &&
-			compare_eth(coding_packet->prev_hop,
-				ethhdr->h_dest))
-		return 1;
-	else
+	if (!compare_eth(coding_packet->next_hop, ethhdr->h_source))
 		return 0;
+
+	printk(KERN_DEBUG "WOMBAT: next_hop match h_source\n");
+	if (!compare_eth(coding_packet->prev_hop, ethhdr->h_dest))
+		return 0;
+
+	printk(KERN_DEBUG "WOMBAT: prev_hop match h_dest\n");
+	return 1;
 }
 
 struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
@@ -211,7 +214,6 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 		index = choose_coding(hash_key, hash->size);
 		lock = &hash->list_locks[index];
 
-		printk(KERN_DEBUG "WOMBAT: Searching coding_packets\n");
 		spin_lock_bh(lock);
 		hlist_for_each_entry_safe(coding_packet, p_node, p_node_tmp,
 				&hash->table[index], hash_entry) {
