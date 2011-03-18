@@ -219,12 +219,12 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 			hash_key[i] =
 				out_coding_node->addr[i] ^ in_coding_node->addr[i];
 		index = choose_coding(hash_key, hash->size);
-		printk(KERN_DEBUG "WOMBAT: Searching bin %d\n", index);
 		lock = &hash->list_locks[index];
 
 		spin_lock_bh(lock);
 		hlist_for_each_entry_safe(coding_packet, p_node, p_node_tmp,
 				&hash->table[index], hash_entry) {
+			printk(KERN_DEBUG "WOMBAT: Checking coding_packet\n");
 			if (source_dest_macth(coding_packet, ethhdr))
 				printk(KERN_DEBUG "WOMBAT: Coding possibility found!\n");
 		}
@@ -292,7 +292,6 @@ int add_coding_skb(struct sk_buff *skb, struct neigh_node *neigh_node,
 		hash_key[i] = coding_packet->prev_hop[i] ^
 			coding_packet->next_hop[i];
 	index = choose_coding(hash_key, bat_priv->coding_hash->size);
-	printk(KERN_DEBUG "WOMBAT: Adding to bin %d\n", index);
 
 	hash_added = hash_add(bat_priv->coding_hash, compare_coding,
 			      choose_coding, hash_key,
