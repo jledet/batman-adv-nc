@@ -72,21 +72,21 @@ int add_coding_node(struct orig_node *orig_node,
 		return -1;
 
 	INIT_HLIST_NODE(&in_coding_node->list);
-	memcpy(in_coding_node->addr, neigh_orig_node->orig, ETH_ALEN);
+	memcpy(in_coding_node->addr, orig_node->orig, ETH_ALEN);
 	in_coding_node->orig_node = neigh_orig_node;
 	atomic_set(&in_coding_node->refcount, 1);
 
 	INIT_HLIST_NODE(&out_coding_node->list);
-	memcpy(out_coding_node->addr, orig_node->orig, ETH_ALEN);
+	memcpy(out_coding_node->addr, neigh_orig_node->orig, ETH_ALEN);
 	out_coding_node->orig_node = orig_node;
 	atomic_set(&out_coding_node->refcount, 1);
 
 	spin_lock_bh(&orig_node->in_coding_list_lock);
-	hlist_add_head_rcu(&in_coding_node->list, &orig_node->in_coding_list);
+	hlist_add_head_rcu(&in_coding_node->list, &neigh_orig_node->in_coding_list);
 	spin_unlock_bh(&orig_node->in_coding_list_lock);
 
 	spin_lock_bh(&orig_node->out_coding_list_lock);
-	hlist_add_head_rcu(&out_coding_node->list, &neigh_orig_node->out_coding_list);
+	hlist_add_head_rcu(&out_coding_node->list, &orig_node->out_coding_list);
 	spin_unlock_bh(&orig_node->out_coding_list_lock);
 
 	return 0;
