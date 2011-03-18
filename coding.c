@@ -242,7 +242,8 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 	return NULL;
 
 out:
-	rcu_rad_unlock();
+	spin_unlock_bh(lock);
+	rcu_read_unlock();
 	return coding_packet;
 }
 
