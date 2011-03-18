@@ -43,18 +43,16 @@ static inline int compare_coding(struct hlist_node *node, void *data2)
 		container_of(node, struct coding_packet, hash_entry);
 	struct coding_packet *coding_packet2 =
 		(struct coding_packet *)data2;
-	struct ethhdr *eth1 =
-		(struct ethhdr *)skb_mac_header(coding_packet1->skb);
-	struct ethhdr *eth2 =
-		(struct ethhdr *)skb_mac_header(coding_packet2->skb);
 
 	if (coding_packet1->id != coding_packet2->id)
 		return 0;
 
-	if (memcmp(eth1->h_dest, eth2->h_dest, ETH_ALEN))
+	if (memcmp(coding_packet1->next_hop,
+				coding_packet2->next_hop, ETH_ALEN))
 		return 0;
 
-	if (memcmp(eth1->h_source, eth2->h_source, ETH_ALEN))
+	if (memcmp(coding_packet1->prev_hop,
+				coding_packet2->prev_hop, ETH_ALEN))
 		return 0;
 
 	return 1;
