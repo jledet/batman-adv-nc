@@ -188,6 +188,13 @@ int coding_thread(void *data)
 inline int source_dest_macth(struct coding_packet *coding_packet,
 		struct ethhdr *ethhdr)
 {
+	uint8_t eth1[18], eth2[18];
+
+	pretty_mac(eth1, coding_packet->next_hop);
+	pretty_mac(eth2, ethhdr->h_source);
+
+	printk(KERN_DEBUG "WOMBAT: if %s == %s ?\n", eth1, eth2);
+
 	if (!compare_eth(coding_packet->next_hop, ethhdr->h_source))
 		return 0;
 
@@ -224,7 +231,6 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 		spin_lock_bh(lock);
 		hlist_for_each_entry_safe(coding_packet, p_node, p_node_tmp,
 				&hash->table[index], hash_entry) {
-			printk(KERN_DEBUG "WOMBAT: Checking coding_packet\n");
 			if (source_dest_macth(coding_packet, ethhdr))
 				printk(KERN_DEBUG "WOMBAT: Coding possibility found!\n");
 		}
