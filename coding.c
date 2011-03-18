@@ -188,13 +188,14 @@ int coding_thread(void *data)
 inline int source_dest_macth(struct coding_packet *coding_packet,
 		struct ethhdr *ethhdr)
 {
+	/*
 	uint8_t eth1[18], eth2[18];
 
 	pretty_mac(eth1, coding_packet->next_hop);
 	pretty_mac(eth2, ethhdr->h_source);
 
 	printk(KERN_DEBUG "WOMBAT: if %s == %s ?\n", eth1, eth2);
-
+	*/
 	if (!compare_eth(coding_packet->next_hop, ethhdr->h_source))
 		return 0;
 
