@@ -228,7 +228,7 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 						in_coding_node->addr) &&
 					compare_eth(coding_packet->next_hop,
 						out_coding_node->addr)) {
-				return coding_packet;
+				goto out;
 			}
 
 			/* Will never match */
@@ -240,6 +240,10 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 	rcu_read_unlock();
 
 	return NULL;
+
+out:
+	rcu_rad_unlock();
+	return coding_packet;
 }
 
 
