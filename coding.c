@@ -233,11 +233,11 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 		hlist_for_each_entry_safe(coding_packet, p_node, p_node_tmp,
 				&hash->table[index], hash_entry) {
 			if (compare_eth(coding_packet->prev_hop,
-						in_coding_node->addr))
-				printk(KERN_DEBUG "WOMBAT: Nearly there...\n");
-			if (compare_eth(coding_packet->next_hop,
+						in_coding_node->addr) &&
+					compare_eth(coding_packet->next_hop,
 						out_coding_node->addr))
 				printk(KERN_DEBUG "WOMBAT: X Coding posibility!\n");
+
 			/* Will never match */
 			if (source_dest_macth(coding_packet, ethhdr))
 				printk(KERN_DEBUG "WOMBAT: A&B Coding possibility!\n");
