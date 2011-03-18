@@ -235,6 +235,7 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 				printk(KERN_DEBUG "WOMBAT: X Coding posibility to:\n");
 				printk(KERN_DEBUG "        %s\n", eth1);
 				printk(KERN_DEBUG "        %s\n", eth2);
+			}
 
 			/* Will never match */
 			if (source_dest_macth(coding_packet, ethhdr))
