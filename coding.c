@@ -211,6 +211,7 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 		index = choose_coding(hash_key, hash->size);
 		lock = &hash->list_locks[index];
 
+		printk(KERN_DEBUG "WOMBAT: Searching coding_packets\n");
 		spin_lock_bh(lock);
 		hlist_for_each_entry_safe(coding_packet, p_node, p_node_tmp,
 				&hash->table[index], hash_entry) {
@@ -235,6 +236,7 @@ int send_coded_packet(struct sk_buff *skb, struct neigh_node *neigh_node,
 	struct coding_node *coding_node;
 
 	/* for neighbor of orig_node */
+	printk(KERN_DEBUG "WOMBAT: Searching coding_nodes\n");
 	rcu_read_lock();
 	hlist_for_each_entry_rcu(coding_node, node,
 			&orig_node->in_coding_list, list) {
