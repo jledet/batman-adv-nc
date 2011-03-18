@@ -79,7 +79,7 @@ int add_coding_node(struct orig_node *orig_node,
 	spin_unlock_bh(&orig_node->in_coding_list_lock);
 
 	spin_lock_bh(&orig_node->out_coding_list_lock);
-	hlist_add_head_rcu(&coding_node->list, &orig_node->out_coding_list);
+	hlist_add_head_rcu(&coding_node->list, &neigh_orig_node->out_coding_list);
 	spin_unlock_bh(&orig_node->out_coding_list_lock);
 
 	return 0;
@@ -193,24 +193,24 @@ inline int source_dest_macth(struct coding_packet *coding_packet,
 }
 
 struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
-		struct coding_node *decoding_node, struct ethhdr *ethhdr)
+		struct coding_node *in_coding_node, struct ethhdr *ethhdr)
 {
 	struct hashtable_t *hash = bat_priv->coding_hash;
 	struct hlist_node *node, *p_node, *p_node_tmp;
 	struct orig_node *orig_node = get_orig_node(bat_priv, ethhdr->h_source);
-	struct coding_node *coding_node;
+	struct coding_node *out_coding_node;
 	struct coding_packet *coding_packet;
 	spinlock_t *lock;
 	int index, i;
 	uint8_t hash_key[ETH_ALEN];
 
 	rcu_read_lock();
-	hlist_for_each_entry_rcu(coding_node, node,
+	hlist_for_each_entry_rcu(out_coding_node, node,
 			&orig_node->out_coding_list, list) {
 		/* Create almost unique path key */
 		for (i = 0; i < ETH_ALEN; ++i)
 			hash_key[i] =
-				coding_node->addr[i] ^ decoding_node->addr[i];
+				out_coding_node->addr[i] ^ in_coding_node->addr[i];
 		index = choose_coding(hash_key, hash->size);
 		printk(KERN_DEBUG "WOMBAT: Searching bin %d\n", index);
 		lock = &hash->list_locks[index];
@@ -285,7 +285,7 @@ int add_coding_skb(struct sk_buff *skb, struct neigh_node *neigh_node,
 		hash_key[i] = coding_packet->prev_hop[i] ^
 			coding_packet->next_hop[i];
 	index = choose_coding(hash_key, bat_priv->coding_hash->size);
-	printk(KERN_DEBUG "WOMBAT: Addin to bin %d\n", index);
+	printk(KERN_DEBUG "WOMBAT: Adding to bin %d\n", index);
 
 	hash_added = hash_add(bat_priv->coding_hash, compare_coding,
 			      choose_coding, hash_key,
