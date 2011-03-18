@@ -273,7 +273,7 @@ int add_coding_skb(struct sk_buff *skb, struct neigh_node *neigh_node,
 
 	atomic_set(&coding_packet->refcount, 1);
 	memcpy(coding_packet->next_hop, neigh_node->addr, ETH_ALEN);
-	memcpy(coding_packet->prev_hop, ethhdr->h_source, ETH_ALEN);
+	/* memcpy(coding_packet->prev_hop, ethhdr->h_source, ETH_ALEN); */
 	coding_packet->timestamp = jiffies;
 	coding_packet->id = unicast_packet->decoding_id;
 	coding_packet->skb = skb;
