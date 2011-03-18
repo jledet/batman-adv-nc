@@ -264,7 +264,7 @@ int add_coding_skb(struct sk_buff *skb, struct neigh_node *neigh_node,
 	if (unicast_packet->packet_type != BAT_UNICAST)
 		return NET_RX_DROP;
 
-	coded = send_coded_packet(skb, neigh_node, ethhdr);
+	/* coded = send_coded_packet(skb, neigh_node, ethhdr); */
 
 	coding_packet = kzalloc(sizeof(struct coding_packet), GFP_ATOMIC);
 
