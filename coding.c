@@ -212,6 +212,7 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 			hash_key[i] =
 				coding_node->addr[i] ^ decoding_node->addr[i];
 		index = choose_coding(hash_key, hash->size);
+		printk(KERN_DEBUG "WOMBAT: Searching bin %d\n", index);
 		lock = &hash->list_locks[index];
 
 		spin_lock_bh(lock);
@@ -252,7 +253,7 @@ int add_coding_skb(struct sk_buff *skb, struct neigh_node *neigh_node,
 	struct ethhdr *ethhdr)
 {
 	int hash_added;
-	int coded = 0, i;
+	int coded = 0, i, index;
 	uint8_t hash_key[ETH_ALEN];
 	struct bat_priv *bat_priv
 		= netdev_priv(neigh_node->if_incoming->soft_iface);
@@ -283,6 +284,8 @@ int add_coding_skb(struct sk_buff *skb, struct neigh_node *neigh_node,
 	for (i = 0; i < ETH_ALEN; ++i)
 		hash_key[i] = coding_packet->prev_hop[i] ^
 			coding_packet->next_hop[i];
+	index = choose_coding(hash_key, bat_priv->coding_hash->size);
+	printk(KERN_DEBUG "WOMBAT: Addin to bin %d\n", index);
 
 	hash_added = hash_add(bat_priv->coding_hash, compare_coding,
 			      choose_coding, hash_key,
@@ -331,6 +334,8 @@ void add_decoding_skb(struct hard_iface *hard_iface, struct sk_buff *skb)
 	decoding_packet->timestamp = jiffies;
 	decoding_packet->id = unicast_packet->decoding_id;
 	decoding_packet->skb = decoding_skb;
+
+
 
 	hash_added = hash_add(bat_priv->decoding_hash, compare_decoding,
 			      choose_decoding, decoding_packet,
