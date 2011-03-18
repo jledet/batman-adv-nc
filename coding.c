@@ -271,7 +271,6 @@ int add_coding_skb(struct sk_buff *skb, struct neigh_node *neigh_node,
 	if (!coding_packet)
 		return NET_RX_DROP;
 
-	printk(KERN_DEBUG "WOMBAT: Setup coding_packet\n");
 	atomic_set(&coding_packet->refcount, 1);
 	memcpy(coding_packet->next_hop, neigh_node->addr, ETH_ALEN);
 	memcpy(coding_packet->prev_hop, ethhdr->h_source, ETH_ALEN);
@@ -285,7 +284,6 @@ int add_coding_skb(struct sk_buff *skb, struct neigh_node *neigh_node,
 		hash_key[i] = coding_packet->prev_hop[i] ^
 			coding_packet->next_hop[i];
 
-	printk(KERN_DEBUG "WOMBAT: Add coding_packet to coding_hash\n");
 	hash_added = hash_add(bat_priv->coding_hash, compare_coding,
 			      choose_coding, hash_key,
 			      &coding_packet->hash_entry);
@@ -294,7 +292,6 @@ int add_coding_skb(struct sk_buff *skb, struct neigh_node *neigh_node,
 
 	atomic_inc(&bat_priv->coding_hash_count);
 
-	printk(KERN_DEBUG "WOMBAT: add_coding_skb returns\n");
 	return NET_RX_SUCCESS;
 
 free_coding_packet:
