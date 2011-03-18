@@ -96,6 +96,7 @@ static inline int hash_add(struct hashtable_t *hash,
 
 	rcu_read_lock();
 	__hlist_for_each_rcu(node, head) {
+		printk(KERN_DEBUG "WOMBAT: hash_add for each\n");
 		if (!compare(node, data))
 			continue;
 
