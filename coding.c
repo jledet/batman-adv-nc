@@ -240,6 +240,7 @@ int send_coded_packet(struct sk_buff *skb, struct neigh_node *neigh_node,
 	rcu_read_lock();
 	hlist_for_each_entry_rcu(coding_node, node,
 			&orig_node->in_coding_list, list) {
+		continue;
 		find_coding_packet(bat_priv, coding_node, ethhdr);
 	}
 	rcu_read_unlock();
@@ -263,7 +264,8 @@ int add_coding_skb(struct sk_buff *skb, struct neigh_node *neigh_node,
 	if (unicast_packet->packet_type != BAT_UNICAST)
 		return NET_RX_DROP;
 
-	coded = send_coded_packet(skb, neigh_node, ethhdr);
+	/* coded = send_coded_packet(skb, neigh_node, ethhdr); */
+	printk(KERN_DEBUG "WOMBAT: Add coding skb\n");
 
 	coding_packet = kzalloc(sizeof(struct coding_packet), GFP_ATOMIC);
 
