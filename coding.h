@@ -23,7 +23,6 @@ static inline int choose_coding(void *data, int32_t size)
 	uint32_t hash = 0;
 	size_t i;
 
-	printk(KERN_DEBUG "WOMBAT: Enter choose_coding\n");
 	for (i = 0; i < 6; i++) {
 		hash += key[i];
 		hash += (hash << 10);
@@ -34,7 +33,6 @@ static inline int choose_coding(void *data, int32_t size)
 	hash ^= (hash >> 11);
 	hash += (hash << 15);
 
-	printk(KERN_DEBUG "WOMBAT: Exit choose_coding\n");
 	return hash % size;
 }
 
@@ -50,23 +48,15 @@ static inline int compare_coding(struct hlist_node *node, void *data2)
 	struct ethhdr *eth2 =
 		(struct ethhdr *)skb_mac_header(coding_packet2->skb);
 
-	printk(KERN_DEBUG "WOMBAT: Enter compare_coding\n");
-	if (coding_packet1->id != coding_packet2->id) {
-		printk(KERN_DEBUG "WOMBAT: Exit compare_coding\n");
+	if (coding_packet1->id != coding_packet2->id)
 		return 0;
-	}
 
-	if (memcmp(eth1->h_dest, eth2->h_dest, ETH_ALEN)) {
-		printk(KERN_DEBUG "WOMBAT: Exit compare_coding\n");
+	if (memcmp(eth1->h_dest, eth2->h_dest, ETH_ALEN))
 		return 0;
-	}
 
-	if (memcmp(eth1->h_source, eth2->h_source, ETH_ALEN)) {
-		printk(KERN_DEBUG "WOMBAT: Exit compare_coding\n");
+	if (memcmp(eth1->h_source, eth2->h_source, ETH_ALEN))
 		return 0;
-	}
 
-	printk(KERN_DEBUG "WOMBAT: Exit compare_coding\n");
 	return 1;
 }
 
