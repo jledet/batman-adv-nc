@@ -239,8 +239,6 @@ int send_coded_packet(struct sk_buff *skb, struct neigh_node *neigh_node,
 	rcu_read_lock();
 	hlist_for_each_entry_rcu(coding_node, node,
 			&orig_node->in_coding_list, list) {
-		printk(KERN_DEBUG "WOMBAT: Checking coding_node\n");
-		continue;
 		find_coding_packet(bat_priv, coding_node, ethhdr);
 	}
 	rcu_read_unlock();
