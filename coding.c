@@ -265,8 +265,8 @@ int send_coded_packet(struct sk_buff *skb, struct neigh_node *neigh_node,
 			pretty_mac(eth1, coding_packet->next_hop);
 			pretty_mac(eth2, neigh_node->addr);
 			printk(KERN_DEBUG "WOMBAT: X Coding posibility to:\n");
-			printk(KERN_DEBUG "        %s\n", eth1);
-			printk(KERN_DEBUG "        %s\n", eth2);
+			printk(KERN_DEBUG "            %s\n", eth1);
+			printk(KERN_DEBUG "            %s\n", eth2);
 		}
 	}
 	rcu_read_unlock();
