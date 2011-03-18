@@ -390,10 +390,8 @@ static void _purge_orig(struct bat_priv *bat_priv)
 			if (purge_orig_node(bat_priv, orig_node)) {
 				if (orig_node->gw_flags)
 					gw_node_delete(bat_priv, orig_node);
-				printk(KERN_DEBUG "WOMBAT: found orig node to purge\n");
 				hlist_del_rcu(node);
 				orig_node_free_ref(orig_node);
-				printk(KERN_DEBUG "WOMBAT: orig node purged\n");
 				continue;
 			}
 

@@ -104,11 +104,9 @@ static inline int hash_add(struct hashtable_t *hash,
 	rcu_read_unlock();
 
 	/* no duplicate found in list, add new element */
-	printk(KERN_DEBUG "WOMBAT: hlist_add begin\n");
 	spin_lock_bh(list_lock);
 	hlist_add_head_rcu(data_node, head);
 	spin_unlock_bh(list_lock);
-	printk(KERN_DEBUG "WOMBAT: hlist_add end\n");
 
 	return 0;
 

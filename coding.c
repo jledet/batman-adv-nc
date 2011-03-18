@@ -287,8 +287,10 @@ int add_coding_skb(struct sk_buff *skb, struct neigh_node *neigh_node,
 	hash_added = hash_add(bat_priv->coding_hash, compare_coding,
 			      choose_coding, hash_key,
 			      &coding_packet->hash_entry);
-	if (hash_added < 0)
+	if (hash_added < 0) {
+		printk(KERN_DEBUG "WOMBAT: hash_add failed\n");
 		goto free_coding_packet;
+	}
 
 	atomic_inc(&bat_priv->coding_hash_count);
 
