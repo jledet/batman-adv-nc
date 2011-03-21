@@ -104,10 +104,126 @@ void coding_orig_neighbor(struct bat_priv *bat_priv,
 	}
 }
 
-int receive_coded_packet(struct bat_priv *bat_priv,
-		struct coded_packet *coded_packet, int hdr_size)
+struct unicast_packet *decode_packet(struct sk_buff *skb,
+		struct coding_packet *decoding_packet)
 {
+	const int header_diff = sizeof(struct coded_packet) -
+		sizeof(struct unicast_packet);
+	const int header_size = sizeof(struct unicast_packet);
+	struct unicast_packet *unicast_packet;
+	struct coded_packet coded_packet_tmp;
+	uint8_t *orig_dest, ttl;
+	uint16_t id;
 
+	memcpy(&coded_packet_tmp, skb->data, sizeof(struct coded_packet));
+
+	if (unlikely(!skb_pull(skb, header_diff)))
+		return NULL;
+
+	memxor((char *)(skb->data + header_size),
+			(char *)(decoding_packet->skb->data + header_size),
+			coded_packet_tmp.second_len);
+
+	if (is_my_mac(coded_packet_tmp.second_dest)) {
+		skb_trim(skb, coded_packet_tmp.second_len + header_size);
+		orig_dest = coded_packet_tmp.second_orig_dest;
+		ttl = coded_packet_tmp.second_ttl;
+		id = coded_packet_tmp.second_id;
+	} else {
+		orig_dest = coded_packet_tmp.first_orig_dest;
+		ttl = coded_packet_tmp.first_ttl;
+		id = coded_packet_tmp.first_id;
+	}
+
+	/* Setup decoded unicast packet */
+	unicast_packet = (struct unicast_packet *)skb->data;
+	unicast_packet->packet_type = BAT_UNICAST;
+	unicast_packet->version = COMPAT_VERSION;
+	memcpy(unicast_packet->dest, orig_dest, ETH_ALEN);
+	unicast_packet->ttl = ttl;
+	unicast_packet->decoding_id = id;
+
+	return unicast_packet;
+}
+
+struct coding_packet *find_decoding_packet(struct bat_priv *bat_priv,
+		struct coded_packet *coded_packet)
+{
+	struct hashtable_t *hash = bat_priv->decoding_hash;
+	struct hlist_node *node, *node_tmp;
+	spinlock_t *list_lock;
+	struct coding_packet *decoding_packet;
+	uint8_t *dest, *source;
+	uint16_t id;
+	struct ethhdr *ethhdr;
+	uint8_t hash_key[6];
+	int index, i;
+
+	if (!hash)
+		return NULL;
+
+	if (!is_my_mac(coded_packet->second_dest)) {
+		dest = coded_packet->second_dest;
+		source = coded_packet->second_source;
+		id = coded_packet->second_id;
+	} else {
+		dest = ethhdr->h_dest;
+		source = coded_packet->first_source;
+		id = coded_packet->first_id;
+	}
+
+	/* Create hash_key */
+	hash_key[0] = (uint8_t)id;
+	hash_key[1] = (uint8_t)*(&id + 1);
+
+	for (i = 2; i < ETH_ALEN; ++i)
+		hash_key[i] = dest[i] ^ source[i];
+
+	index = choose_coding(hash_key, ETH_ALEN);
+	list_lock = &hash->list_locks[index];
+
+	/* Search for matching decoding_packet */
+	spin_lock_bh(list_lock);
+	hlist_for_each_entry_safe(decoding_packet, node, node_tmp,
+			&hash->table[index], hash_entry) {
+		if (id != decoding_packet->id)
+			continue;
+
+		if (!compare_eth(dest, decoding_packet->next_hop))
+			continue;
+
+		if (!compare_eth(source, decoding_packet->prev_hop))
+			continue;
+
+		printk(KERN_DEBUG "WOMBAT: Found decoding packet\n");
+		goto out;
+
+	}
+	spin_unlock_bh(list_lock);
+
+	return NULL;
+
+out:
+	spin_unlock_bh(list_lock);
+	hlist_del_rcu(node);
+	return decoding_packet;
+
+}
+
+int receive_coded_packet(struct bat_priv *bat_priv,
+		struct sk_buff *skb, int hdr_size)
+{
+	struct coded_packet *coded_packet =
+		(struct coded_packet *)skb->data;
+	struct coding_packet *decoding_packet =
+		find_decoding_packet(bat_priv, coded_packet);
+	struct unicast_packet *unicast_packet;
+
+	if (!decoding_packet)
+		return NET_RX_DROP;
+
+	unicast_packet = decode_packet(skb, decoding_packet);
+	printk(KERN_DEBUG "WOMBAT: Received coded packet.\n");
 	return -1;
 }
 
@@ -185,17 +301,86 @@ int coding_thread(void *data)
 	return 0;
 }
 
+void code_packets(struct sk_buff *skb, struct ethhdr *ethhdr,
+		struct coding_packet *coding_packet,
+		struct neigh_node *neigh_node)
+{
+	const int unicast_size = sizeof(struct unicast_packet);
+	const int header_add =
+		sizeof(struct coded_packet) - sizeof(struct unicast_packet);
+	struct sk_buff *skb_dest, *skb_src;
+	struct unicast_packet unicast_packet_tmp;
+	struct unicast_packet *unicast_packet1;
+	struct unicast_packet *unicast_packet2;
+	struct coded_packet *coded_packet;
+	uint8_t *first_source, *first_dest, *second_source, *second_dest;
+
+	/* Instead of zero padding the smallest data buffer, we
+	 * code into the longest. */
+	if (skb->data_len > coding_packet->skb->data_len) {
+		skb_dest = skb;
+		skb_src = coding_packet->skb;
+		first_dest = neigh_node->addr;
+		first_source = ethhdr->h_source;
+		second_dest = coding_packet->next_hop;
+		second_source = coding_packet->prev_hop;
+	} else {
+		skb_dest = coding_packet->skb;
+		skb_src = skb;
+		first_dest = coding_packet->next_hop;
+		first_source = coding_packet->prev_hop;
+		second_dest = neigh_node->addr;
+		second_source = ethhdr->h_source;
+	}
+	unicast_packet1 = (struct unicast_packet *)skb_dest->data;
+	unicast_packet2 = (struct unicast_packet *)skb_src->data;
+
+	if(skb_cow(skb_dest, header_add) < 0)
+		return;
+
+	/* Save original header before writing new in place */
+	memcpy(&unicast_packet_tmp, unicast_packet1,
+			sizeof(struct unicast_packet));
+
+	/* Make room for our coded header */
+	skb_push(skb_dest, header_add);
+	coded_packet = (struct coded_packet *)skb_dest->data;
+	skb_reset_mac_header(skb_dest);
+
+	coded_packet->packet_type = BAT_CODED;
+	coded_packet->version = COMPAT_VERSION;
+
+	/* Info about first unicast packet */
+	memcpy(coded_packet->first_source, first_source, ETH_ALEN);
+	memcpy(coded_packet->first_orig_dest, unicast_packet1->dest, ETH_ALEN);
+	coded_packet->first_id = unicast_packet1->decoding_id;
+	coded_packet->first_ttl = unicast_packet1->ttl;
+
+	/* Info about second unicast packet */
+	memcpy(coded_packet->second_dest, second_dest, ETH_ALEN);
+	memcpy(coded_packet->second_source, second_source, ETH_ALEN);
+	memcpy(coded_packet->second_orig_dest, unicast_packet2->dest, ETH_ALEN);
+	coded_packet->second_id = unicast_packet2->decoding_id;
+	coded_packet->second_ttl = unicast_packet2->ttl;
+	coded_packet->second_len = skb_src->data_len - unicast_size;
+
+	memxor((char *)(unicast_packet1 + unicast_size),
+			(char *)(unicast_packet2 + unicast_size),
+			skb_src->data_len - unicast_size);
+
+	send_skb_packet(skb_dest, neigh_node->if_incoming, first_dest);
+}
+
 inline int source_dest_macth(struct coding_packet *coding_packet,
 		struct ethhdr *ethhdr)
 {
+	/* TODO: Change h_source to right address */
 	if (!compare_eth(coding_packet->next_hop, ethhdr->h_source))
 		return 0;
 
-	printk(KERN_DEBUG "WOMBAT: next_hop match h_source\n");
 	if (!compare_eth(coding_packet->prev_hop, ethhdr->h_dest))
 		return 0;
 
-	printk(KERN_DEBUG "WOMBAT: prev_hop match h_dest\n");
 	return 1;
 }
 
@@ -227,13 +412,11 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 			if (compare_eth(coding_packet->prev_hop,
 						in_coding_node->addr) &&
 					compare_eth(coding_packet->next_hop,
-						out_coding_node->addr)) {
+						out_coding_node->addr))
 				goto out;
-			}
 
-			/* Will never match */
 			if (source_dest_macth(coding_packet, ethhdr))
-				printk(KERN_DEBUG "WOMBAT: A&B Coding possibility!\n");
+				goto out;
 		}
 		spin_unlock_bh(lock);
 	}
@@ -242,14 +425,16 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 	return NULL;
 
 out:
+	/* Reference overtaken */
+	hlist_del_rcu(p_node);
 	spin_unlock_bh(lock);
 	rcu_read_unlock();
+
 	return coding_packet;
 }
 
-
-int send_coded_packet(struct sk_buff *skb, struct neigh_node *neigh_node,
-		struct ethhdr *ethhdr)
+int send_coded_packet(struct sk_buff *skb,
+		struct neigh_node *neigh_node, struct ethhdr *ethhdr)
 {
 	struct bat_priv *bat_priv =
 		netdev_priv(neigh_node->if_incoming->soft_iface);
@@ -257,6 +442,7 @@ int send_coded_packet(struct sk_buff *skb, struct neigh_node *neigh_node,
 	struct orig_node *orig_node = neigh_node->orig_node;
 	struct coding_node *coding_node;
 	struct coding_packet *coding_packet;
+	uint8_t eth1[18], eth2[18];
 
 	/* for neighbor of orig_node */
 	rcu_read_lock();
@@ -264,26 +450,32 @@ int send_coded_packet(struct sk_buff *skb, struct neigh_node *neigh_node,
 			&orig_node->in_coding_list, list) {
 		coding_packet =
 			find_coding_packet(bat_priv, coding_node, ethhdr);
-		if (coding_packet) {
-			uint8_t eth1[18], eth2[18];
 
+		if (coding_packet) {
 			pretty_mac(eth1, coding_packet->next_hop);
 			pretty_mac(eth2, neigh_node->addr);
 			printk(KERN_DEBUG "WOMBAT: X Coding posibility to:\n");
 			printk(KERN_DEBUG "            %s\n", eth1);
 			printk(KERN_DEBUG "            %s\n", eth2);
+			code_packets(skb, ethhdr, coding_packet,
+					neigh_node);
+			goto out;
 		}
 	}
 	rcu_read_unlock();
 
 	return 0;
+
+out:
+	rcu_read_unlock();
+	return 1;
 }
 
 int add_coding_skb(struct sk_buff *skb, struct neigh_node *neigh_node,
 	struct ethhdr *ethhdr)
 {
 	int hash_added;
-	int coded = 0, i, index;
+	int i, index;
 	uint8_t hash_key[ETH_ALEN];
 	struct bat_priv *bat_priv
 		= netdev_priv(neigh_node->if_incoming->soft_iface);
@@ -295,7 +487,8 @@ int add_coding_skb(struct sk_buff *skb, struct neigh_node *neigh_node,
 	if (unicast_packet->packet_type != BAT_UNICAST)
 		return NET_RX_DROP;
 
-	coded = send_coded_packet(skb, neigh_node, ethhdr);
+	if (send_coded_packet(skb, neigh_node, ethhdr))
+		return NET_RX_SUCCESS;
 
 	coding_packet = kzalloc(sizeof(struct coding_packet), GFP_ATOMIC);
 
@@ -344,6 +537,7 @@ void add_decoding_skb(struct hard_iface *hard_iface, struct sk_buff *skb)
 		(struct unicast_packet *)skb_network_header(skb);
 	struct sk_buff *decoding_skb;
 	struct coding_packet *decoding_packet;
+	struct ethhdr *ethhdr = (struct ethhdr *)skb_mac_header(skb);
 
 	/* We only handle unicast packets */
 	if (unicast_packet->packet_type != BAT_UNICAST)
@@ -363,8 +557,8 @@ void add_decoding_skb(struct hard_iface *hard_iface, struct sk_buff *skb)
 	decoding_packet->timestamp = jiffies;
 	decoding_packet->id = unicast_packet->decoding_id;
 	decoding_packet->skb = decoding_skb;
-
-
+	memcpy(decoding_packet->prev_hop, ethhdr->h_source, ETH_ALEN);
+	memcpy(decoding_packet->next_hop, ethhdr->h_dest, ETH_ALEN);
 
 	hash_added = hash_add(bat_priv->decoding_hash, compare_decoding,
 			      choose_decoding, decoding_packet,

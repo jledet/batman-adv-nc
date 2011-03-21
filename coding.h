@@ -11,7 +11,7 @@ void coding_orig_neighbor(struct bat_priv *bat_priv,
 		struct orig_node *neigh_node);
 uint16_t get_decoding_id(struct bat_priv *bat_priv);
 int receive_coded_packet(struct bat_priv *bat_priv,
-		struct coded_packet *coded_packet, int hdr_size);
+		struct sk_buff *skb, int hdr_size);
 int add_coding_skb(struct sk_buff *skb, struct neigh_node *neigh_node,
 		struct ethhdr *ethhdr);
 void add_decoding_skb(struct hard_iface *hard_iface, struct sk_buff *skb);
@@ -90,4 +90,12 @@ static inline void pretty_mac(char *asc, char *addr)
 			addr[0], addr[1], addr[2],
 			addr[3], addr[4], addr[5]);
 }
-#endif
+
+static inline void memxor(char *data1, const char *data2, int len)
+{
+	int i;
+
+	for (i = 0; i < len; ++i)
+		data1[i] = data1[i] ^ data2[i];
+}
+#endif /* _NET_BATMAN_ADV_CODING_H */

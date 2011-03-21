@@ -1577,7 +1577,7 @@ int recv_coded_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 	if (!is_my_mac(ethhdr->h_dest) && !is_my_mac(coded_packet->second_dest))
 		return NET_RX_DROP;
 
-	if (receive_coded_packet(bat_priv, coded_packet, hdr_size) < 0)
+	if (receive_coded_packet(bat_priv, skb, hdr_size) < 0)
 		return NET_RX_DROP;
 
 	return NET_RX_SUCCESS;
