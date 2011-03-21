@@ -1250,13 +1250,16 @@ return_router:
 
 static int check_unicast_packet(struct sk_buff *skb, int hdr_size)
 {
-	struct ethhdr *ethhdr;
+	struct ethhdr *ethhdr = (struct ethhdr *)skb_mac_header(skb);
 
 	/* drop packet if it has not necessary minimum size */
 	if (unlikely(!pskb_may_pull(skb, hdr_size)))
 		return -2;
 
-	ethhdr = (struct ethhdr *)skb_mac_header(skb);
+	/* not for me */
+	if (!is_my_mac(ethhdr->h_dest)) {
+		return -1;
+	}
 
 	/* packet with unicast indication but broadcast recipient */
 	if (is_broadcast_ether_addr(ethhdr->h_dest))
@@ -1265,10 +1268,6 @@ static int check_unicast_packet(struct sk_buff *skb, int hdr_size)
 	/* packet with broadcast sender address */
 	if (is_broadcast_ether_addr(ethhdr->h_source))
 		return -2;
-
-	/* not for me */
-	if (!is_my_mac(ethhdr->h_dest))
-		return -1;
 
 	return 0;
 }

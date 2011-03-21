@@ -153,7 +153,7 @@ struct coding_packet *find_decoding_packet(struct bat_priv *bat_priv,
 	struct hlist_node *node, *node_tmp;
 	spinlock_t *list_lock;
 	struct coding_packet *decoding_packet;
-	uint8_t *dest, *source;
+	uint8_t *dest, *source, ttl;
 	uint16_t id;
 	struct ethhdr *ethhdr;
 	uint8_t hash_key[6];
@@ -179,7 +179,7 @@ struct coding_packet *find_decoding_packet(struct bat_priv *bat_priv,
 	for (i = 2; i < ETH_ALEN; ++i)
 		hash_key[i] = dest[i] ^ source[i];
 
-	index = choose_coding(hash_key, ETH_ALEN);
+	index = choose_coding(hash_key, hash->size);
 	list_lock = &hash->list_locks[index];
 
 	/* Search for matching decoding_packet */
@@ -204,8 +204,8 @@ struct coding_packet *find_decoding_packet(struct bat_priv *bat_priv,
 	return NULL;
 
 out:
-	spin_unlock_bh(list_lock);
 	hlist_del_rcu(node);
+	spin_unlock_bh(list_lock);
 	return decoding_packet;
 
 }
@@ -316,8 +316,8 @@ void code_packets(struct sk_buff *skb, struct ethhdr *ethhdr,
 	uint8_t *first_source, *first_dest, *second_source, *second_dest;
 
 	/* Instead of zero padding the smallest data buffer, we
-	 * code into the longest. */
-	if (skb->data_len > coding_packet->skb->data_len) {
+	 * code into the largest. */
+	if (skb->data_len >= coding_packet->skb->data_len) {
 		skb_dest = skb;
 		skb_src = coding_packet->skb;
 		first_dest = neigh_node->addr;
@@ -538,6 +538,8 @@ void add_decoding_skb(struct hard_iface *hard_iface, struct sk_buff *skb)
 	struct sk_buff *decoding_skb;
 	struct coding_packet *decoding_packet;
 	struct ethhdr *ethhdr = (struct ethhdr *)skb_mac_header(skb);
+	uint8_t hash_key[6];
+	int i;
 
 	/* We only handle unicast packets */
 	if (unicast_packet->packet_type != BAT_UNICAST)
@@ -560,8 +562,14 @@ void add_decoding_skb(struct hard_iface *hard_iface, struct sk_buff *skb)
 	memcpy(decoding_packet->prev_hop, ethhdr->h_source, ETH_ALEN);
 	memcpy(decoding_packet->next_hop, ethhdr->h_dest, ETH_ALEN);
 
-	hash_added = hash_add(bat_priv->decoding_hash, compare_decoding,
-			      choose_decoding, decoding_packet,
+	hash_key[0] = (uint8_t)decoding_packet->id;
+	hash_key[1] = (uint8_t)*(&decoding_packet->id + 1);
+
+	for (i = 2; i < ETH_ALEN; ++i)
+		hash_key[i] = ethhdr->h_dest[i] ^ ethhdr->h_source[i];
+
+	hash_added = hash_add(bat_priv->decoding_hash, compare_coding,
+			      choose_coding, hash_key,
 			      &decoding_packet->hash_entry);
 	if (hash_added < 0)
 		goto free_decoding_packet;
