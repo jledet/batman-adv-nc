@@ -35,6 +35,7 @@
 #include "gateway_client.h"
 #include "unicast.h"
 #include "coding.h"
+#include "decoding.h"
 
 void slide_own_bcast_window(struct hard_iface *hard_iface)
 {
@@ -1371,7 +1372,7 @@ int recv_unicast_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 
 	case -1:
 		add_decoding_skb(recv_if, skb);
-		/* fall through */
+		return NET_RX_SUCCESS;
 
 	case -2:
 		return NET_RX_DROP;
@@ -1558,6 +1559,7 @@ int recv_vis_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 int recv_coded_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 {
 	struct coded_packet *coded_packet;
+	struct unicast_packet *unicast_packet;
 	struct ethhdr *ethhdr;
 	struct bat_priv *bat_priv = netdev_priv(recv_if->soft_iface);
 	int hdr_size = sizeof(struct coded_packet);
@@ -1576,8 +1578,10 @@ int recv_coded_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 	if (!is_my_mac(ethhdr->h_dest) && !is_my_mac(coded_packet->second_dest))
 		return NET_RX_DROP;
 
-	if (receive_coded_packet(bat_priv, skb, hdr_size) < 0)
+	unicast_packet = receive_coded_packet(bat_priv, skb, hdr_size);
+
+	if (!unicast_packet)
 		return NET_RX_DROP;
 
-	return NET_RX_SUCCESS;
+	return recv_unicast_packet(skb, recv_if);
 }

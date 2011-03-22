@@ -207,6 +207,7 @@ struct bat_priv {
 	struct hashtable_t *decoding_hash;
 	struct hashtable_t *coding_hash;
 	atomic_t coding_hash_count;
+	atomic_t decoding_hash_count;
 	struct delayed_work decoding_work;
 	struct task_struct *coding_thread;
 	atomic_t last_decoding_id;

@@ -30,6 +30,7 @@
 #include "gateway_common.h"
 #include "originator.h"
 #include "coding.h"
+#include "decoding.h"
 
 static void send_outstanding_bcast_packet(struct work_struct *work);
 
@@ -91,7 +92,7 @@ int send_skb_packet(struct sk_buff *skb,
 	skb->dev = hard_iface->net_dev;
 
 	/* Store packet for later network decoding */
-	add_decoding_skb(hard_iface, skb);
+	add_decoding_skb(hard_iface, skb_clone(skb, GFP_ATOMIC));
 
 	/* dev_queue_xmit() returns a negative result on error.	 However on
 	 * congestion and traffic shaping, it drops and returns NET_XMIT_DROP
@@ -99,7 +100,7 @@ int send_skb_packet(struct sk_buff *skb,
 
 	return dev_queue_xmit(skb);
 send_skb_err:
-	kfree_skb(skb);
+	dev_kfree_skb(skb);
 	return NET_XMIT_DROP;
 }
 

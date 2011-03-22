@@ -30,6 +30,7 @@
 #include "routing.h"
 #include "hard-interface.h"
 #include "coding.h"
+#include "decoding.h"
 
 
 static struct sk_buff *frag_merge_packet(struct list_head *head,

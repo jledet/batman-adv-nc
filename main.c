@@ -33,6 +33,7 @@
 #include "vis.h"
 #include "hash.h"
 #include "coding.h"
+#include "decoding.h"
 
 struct list_head hardif_list;
 
@@ -111,6 +112,9 @@ int mesh_init(struct net_device *soft_iface)
 	if (coding_init(bat_priv) < 0)
 		goto err;
 
+	if (decoding_init(bat_priv) < 0)
+		goto err;
+
 	atomic_set(&bat_priv->mesh_state, MESH_ACTIVE);
 	goto end;
 
@@ -137,6 +141,7 @@ void mesh_free(struct net_device *soft_iface)
 	gw_node_purge(bat_priv);
 	originator_free(bat_priv);
 	coding_free(bat_priv);
+	decoding_free(bat_priv);
 
 	hna_local_free(bat_priv);
 	hna_global_free(bat_priv);
