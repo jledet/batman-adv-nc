@@ -1,7 +1,7 @@
 #ifndef _NET_BATMAN_ADV_CODING_H
 #define _NET_BATMAN_ADV_CODING_H
 
-#define CODING_HOLD 1000 /* milliseconds */
+#define CODING_HOLD 2000 /* milliseconds */
 
 int coding_init(struct bat_priv *bat_priv);
 void coding_free(struct bat_priv *bat_priv);

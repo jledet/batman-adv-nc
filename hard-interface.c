@@ -648,7 +648,6 @@ static int batman_skb_recv(struct sk_buff *skb, struct net_device *dev,
 		/* coded packet */
 	case BAT_CODED:
 		ret = recv_coded_packet(skb, hard_iface);
-		printk(KERN_DEBUG "WOMBAT: Returned from recv_coded_packet\n");
 		break;
 
 	default:
@@ -662,8 +661,6 @@ static int batman_skb_recv(struct sk_buff *skb, struct net_device *dev,
 	 * most probably dropped the packet for
 	 * routing-logical reasons. */
 
-	if (batman_packet->packet_type == BAT_CODED)
-		printk(KERN_DEBUG "WOMBAT: Return from skb_recv\n");
 	return NET_RX_SUCCESS;
 
 err_free:

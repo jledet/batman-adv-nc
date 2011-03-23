@@ -43,28 +43,31 @@ struct unicast_packet *decode_packet(struct sk_buff *skb,
 	const int header_size = sizeof(struct unicast_packet);
 	struct unicast_packet *unicast_packet;
 	struct coded_packet coded_packet_tmp;
-	struct ethhdr ethhdr_tmp;
+	struct ethhdr *ethhdr, ethhdr_tmp;
 	uint8_t *orig_dest, ttl;
 	uint16_t id;
+	uint8_t *byte1, *byte2;
 
 	memcpy(&coded_packet_tmp, skb->data, sizeof(struct coded_packet));
 	memcpy(&ethhdr_tmp, skb_mac_header(skb), sizeof(struct ethhdr));
 
-	if (skb_cow(skb, 0) < 0)
+	if (skb_cow(skb, 0) < 0) {
+		printk(KERN_DEBUG "WOMBAT: skb_cow failed\n");
 		return NULL;
+	}
 
-	if (unlikely(!skb_pull_rcsum(skb, header_diff)))
+	if (unlikely(!skb_pull_rcsum(skb, header_diff))) {
+		printk(KERN_DEBUG "WOMBAT: skb_pull_rcsum failed\n");
 		return NULL;
+	}
 
 	/* Realign mac header */
 	skb_set_mac_header(skb, -ETH_HLEN);
-	memcpy(skb_mac_header(skb), &ethhdr_tmp, sizeof(struct ethhdr));
-
-	memxor(skb->data + header_size,
-			decoding_packet->skb->data + header_size,
-			ntohs(coded_packet_tmp.second_len));
+	ethhdr = (struct ethhdr *)skb_mac_header(skb);
+	memcpy(ethhdr, &ethhdr_tmp, sizeof(struct ethhdr));
 
 	if (is_my_mac(coded_packet_tmp.second_dest)) {
+		memcpy(ethhdr->h_dest, coded_packet_tmp.second_dest, ETH_ALEN);
 		skb_trim(skb, coded_packet_tmp.second_len + header_size);
 		orig_dest = coded_packet_tmp.second_orig_dest;
 		ttl = coded_packet_tmp.second_ttl;
@@ -75,6 +78,10 @@ struct unicast_packet *decode_packet(struct sk_buff *skb,
 		id = coded_packet_tmp.first_id;
 	}
 
+	memxor(skb->data + header_size,
+			decoding_packet->skb->data + header_size,
+			ntohs(coded_packet_tmp.second_len));
+
 	/* Setup decoded unicast packet */
 	unicast_packet = (struct unicast_packet *)skb->data;
 	unicast_packet->packet_type = BAT_UNICAST;
@@ -82,6 +89,13 @@ struct unicast_packet *decode_packet(struct sk_buff *skb,
 	memcpy(unicast_packet->dest, orig_dest, ETH_ALEN);
 	unicast_packet->ttl = ttl;
 	unicast_packet->decoding_id = id;
+
+	byte1 = skb->data + header_size;
+	byte2 = decoding_packet->skb->data + header_size;
+
+	printk(KERN_DEBUG "CW: Decoded: %hu xor %hu (%02x xor %02x)\n",
+			unicast_packet->decoding_id, decoding_packet->id,
+			*byte1, *byte2);
 
 	return unicast_packet;
 }
@@ -113,6 +127,9 @@ struct coding_packet *find_decoding_packet(struct bat_priv *bat_priv,
 		source = coded_packet->first_source;
 		id = coded_packet->first_id;
 	}
+
+	printk(KERN_DEBUG "WOMBAT: Received packet: %hu xor %hu\n",
+			coded_packet->first_id, coded_packet->second_id);
 
 	/* TODO: Include id in hash_key */
 	for (i = 0; i < ETH_ALEN; ++i)
@@ -146,6 +163,7 @@ out:
 	atomic_dec(&bat_priv->decoding_hash_count);
 	hlist_del_rcu(node);
 	spin_unlock_bh(list_lock);
+	printk(KERN_DEBUG "CW: Found decoding id %hu\n", decoding_packet->id);
 	return decoding_packet;
 }
 
@@ -165,7 +183,6 @@ struct unicast_packet *receive_coded_packet(struct bat_priv *bat_priv,
 	if (!unicast_packet)
 		return NULL;
 
-	printk(KERN_DEBUG "WOMBAT: Return from recv\n");
 	return unicast_packet;
 }
 
@@ -188,6 +205,9 @@ void add_decoding_skb(struct hard_iface *hard_iface, struct sk_buff *skb)
 
 	if (!decoding_packet)
 		return;
+
+	/* Adjust skb-data to point at batman-packet */
+	skb_pull_rcsum(skb, ETH_HLEN);
 
 	atomic_set(&decoding_packet->refcount, 1);
 	decoding_packet->timestamp = jiffies;

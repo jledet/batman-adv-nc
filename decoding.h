@@ -1,7 +1,7 @@
 #ifndef _NET_BATMAN_ADV_DECODING_H
 #define _NET_BATMAN_ADV_DECODING_H
 
-#define DECODING_TIMEOUT 1 /* seconds */
+#define DECODING_TIMEOUT 5 /* seconds */
 
 int decoding_init(struct bat_priv *bat_priv);
 void decoding_free(struct bat_priv *bat_priv);

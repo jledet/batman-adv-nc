@@ -78,8 +78,14 @@ void coding_orig_neighbor(struct bat_priv *bat_priv,
 		struct orig_node *orig_node,
 		struct orig_node *neigh_orig_node)
 {
+	uint8_t mac1[18], mac2[18];
+
+	pretty_mac(mac1, orig_node->orig);
+	pretty_mac(mac2, neigh_orig_node->orig);
+
 	if (!orig_has_neighbor(orig_node, neigh_orig_node)) {
-		printk(KERN_DEBUG "WOMBAT: Adding coding neighbor\n");
+		printk(KERN_DEBUG "WOMBAT: Adding coding neighbor:\n");
+		printk(KERN_DEBUG "  %s -> %s\n", mac1, mac2);
 		if (add_coding_node(orig_node, neigh_orig_node) < 0) {
 			printk(KERN_DEBUG "Adding coding node failed\n");
 		}
@@ -175,6 +181,7 @@ void code_packets(struct sk_buff *skb, struct ethhdr *ethhdr,
 	struct unicast_packet *unicast_packet2;
 	struct coded_packet *coded_packet;
 	uint8_t *first_source, *first_dest, *second_source, *second_dest;
+	uint8_t *byte1, *byte2;
 
 	/* Instead of zero padding the smallest data buffer, we
 	 * code into the largest. */
@@ -197,6 +204,12 @@ void code_packets(struct sk_buff *skb, struct ethhdr *ethhdr,
 	data_len = skb_src->len - unicast_size - ETH_HLEN;
 	unicast_packet1 = (struct unicast_packet *)skb_dest->data;
 	unicast_packet2 = (struct unicast_packet *)skb_src->data;
+	byte1 = skb_dest->data + unicast_size;
+	byte2 = skb_src->data + unicast_size;
+
+	printk(KERN_DEBUG "CW: Coding packets: %hu xor %hu (%02x xor %02x)\n",
+			unicast_packet1->decoding_id, unicast_packet2->decoding_id,
+			*byte1, *byte2);
 
 	if(skb_cow(skb_dest, header_add) < 0)
 		return;
@@ -300,9 +313,6 @@ int send_coded_packet(struct sk_buff *skb,
 		if (coding_packet) {
 			pretty_mac(eth1, coding_packet->next_hop);
 			pretty_mac(eth2, neigh_node->addr);
-			printk(KERN_DEBUG "WOMBAT: X Coding posibility to:\n");
-			printk(KERN_DEBUG "            %s\n", eth1);
-			printk(KERN_DEBUG "            %s\n", eth2);
 			code_packets(skb, ethhdr, coding_packet,
 					neigh_node);
 			goto out;

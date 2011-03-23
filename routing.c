@@ -791,6 +791,10 @@ void receive_bat_packet(struct ethhdr *ethhdr,
 				batman_packet->prev_sender))
 		coding_orig_neighbor(bat_priv, orig_node, orig_neigh_node);
 
+	/* Add orig as coding node to itself */
+	if (is_single_hop_neigh)
+		coding_orig_neighbor(bat_priv, orig_node, orig_node);
+
 	bonding_save_primary(orig_node, orig_neigh_node, batman_packet);
 
 	/* update ranking if it is not a duplicate or has the same
@@ -1382,6 +1386,8 @@ int recv_unicast_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 
 	/* packet for me */
 	if (is_my_mac(unicast_packet->dest)) {
+		printk(KERN_DEBUG "CW: Processing unicast packet %hu\n",
+				unicast_packet->decoding_id);
 		interface_rx(recv_if->soft_iface, skb, recv_if, hdr_size);
 		return NET_RX_SUCCESS;
 	}
