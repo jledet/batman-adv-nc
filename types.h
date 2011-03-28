@@ -142,20 +142,27 @@ struct coding_node {
 	struct orig_node *orig_node;
 };
 
-struct coding_packet {
-	/* Used when coding and decoding packets */
+struct coding_path {
 	struct hlist_node hash_entry;
 	struct rcu_head rcu;
+	struct list_head packet_list;
 	atomic_t refcount;
-	unsigned long timestamp;
-	uint16_t id;
-	struct sk_buff *skb;
-
-	/* Only used when coding packets */
-	struct timespec timespec;
-	struct hard_iface *hard_iface;
+	spinlock_t packet_list_lock;
 	uint8_t next_hop[6];
 	uint8_t prev_hop[6];
+};
+
+struct coding_packet {
+	/* Used when coding and decoding packets */
+	struct list_head list;
+	struct rcu_head rcu;
+	atomic_t refcount;
+	uint16_t id;
+	unsigned long timestamp;
+	struct timespec timespec;
+	struct hard_iface *hard_iface;
+	struct sk_buff *skb;
+	struct coding_path *coding_path;
 };
 
 struct bat_priv {

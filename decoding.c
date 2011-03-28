@@ -54,7 +54,7 @@ struct unicast_packet *decode_packet(struct sk_buff *skb,
 	if (skb_cow(skb, 0) < 0) {
 		printk(KERN_DEBUG "WOMBAT: skb_cow failed\n");
 		return NULL;
-	}
+	}                                                                                                                                                                                                                                                                                           
 
 	if (unlikely(!skb_pull_rcsum(skb, header_diff))) {
 		printk(KERN_DEBUG "WOMBAT: skb_pull_rcsum failed\n");
@@ -104,11 +104,12 @@ struct coding_packet *find_decoding_packet(struct bat_priv *bat_priv,
 		struct sk_buff *skb)
 {
 	struct hashtable_t *hash = bat_priv->decoding_hash;
-	struct hlist_node *node, *node_tmp;
+	struct hlist_node *hnode;
 	spinlock_t *list_lock;
 	struct coded_packet *coded_packet =
 		(struct coded_packet *)skb->data;
-	struct coding_packet *decoding_packet;
+	struct coding_packet *decoding_packet, *decoding_packet_tmp;
+	struct coding_path *coding_path;
 	uint8_t *dest, *source;
 	uint16_t id;
 	struct ethhdr *ethhdr = (struct ethhdr *)skb_mac_header(skb);
@@ -128,7 +129,7 @@ struct coding_packet *find_decoding_packet(struct bat_priv *bat_priv,
 		id = coded_packet->first_id;
 	}
 
-	printk(KERN_DEBUG "WOMBAT: Received packet: %hu xor %hu\n",
+	printk(KERN_DEBUG "CW: Received packet: %hu xor %hu\n",
 			coded_packet->first_id, coded_packet->second_id);
 
 	/* TODO: Include id in hash_key */
@@ -140,19 +141,22 @@ struct coding_packet *find_decoding_packet(struct bat_priv *bat_priv,
 
 	/* Search for matching decoding_packet */
 	spin_lock_bh(list_lock);
-	hlist_for_each_entry_safe(decoding_packet, node, node_tmp,
-			&hash->table[index], hash_entry) {
-		if (id != decoding_packet->id)
+	hlist_for_each_entry(coding_path, hnode, &hash->table[index],
+			hash_entry) {
+		if (!compare_eth(dest, coding_path->next_hop))                                                                                                    
 			continue;
 
-		if (!compare_eth(dest, decoding_packet->next_hop))
+		if (!compare_eth(source, coding_path->prev_hop))
 			continue;
-
-		if (!compare_eth(source, decoding_packet->prev_hop))
-			continue;
-
-		goto out;
-
+		
+		spin_lock_bh(&coding_path->packet_list_lock);
+		list_for_each_entry_safe(decoding_packet, decoding_packet_tmp, 
+				&coding_path->packet_list, list) {
+			if (id != decoding_packet->id)
+				continue;
+			goto out;
+		}
+		spin_unlock_bh(&coding_path->packet_list_lock);
 	}
 	spin_unlock_bh(list_lock);
 
@@ -161,7 +165,8 @@ struct coding_packet *find_decoding_packet(struct bat_priv *bat_priv,
 
 out:
 	atomic_dec(&bat_priv->decoding_hash_count);
-	hlist_del_rcu(node);
+	list_del_rcu(&decoding_packet->list);
+	spin_unlock_bh(&coding_path->packet_list_lock);
 	spin_unlock_bh(list_lock);
 	printk(KERN_DEBUG "CW: Found decoding id %hu\n", decoding_packet->id);
 	return decoding_packet;
@@ -188,14 +193,12 @@ struct unicast_packet *receive_coded_packet(struct bat_priv *bat_priv,
 
 void add_decoding_skb(struct hard_iface *hard_iface, struct sk_buff *skb)
 {
-	int hash_added;
 	struct bat_priv *bat_priv = netdev_priv(hard_iface->soft_iface);
 	struct unicast_packet *unicast_packet =
 		(struct unicast_packet *)skb_network_header(skb);
 	struct coding_packet *decoding_packet;
+	struct coding_path *decoding_path;
 	struct ethhdr *ethhdr = (struct ethhdr *)skb_mac_header(skb);
-	uint8_t hash_key[6];
-	int i;
 
 	/* We only handle unicast packets */
 	if (unicast_packet->packet_type != BAT_UNICAST)
@@ -206,6 +209,12 @@ void add_decoding_skb(struct hard_iface *hard_iface, struct sk_buff *skb)
 	if (!decoding_packet)
 		return;
 
+	decoding_path = get_coding_path(bat_priv, ethhdr->h_source,
+			ethhdr->h_dest);
+
+	if (!decoding_path)
+		goto free_decoding_packet;
+
 	/* Adjust skb-data to point at batman-packet */
 	skb_pull_rcsum(skb, ETH_HLEN);
 
@@ -213,20 +222,11 @@ void add_decoding_skb(struct hard_iface *hard_iface, struct sk_buff *skb)
 	decoding_packet->timestamp = jiffies;
 	decoding_packet->id = unicast_packet->decoding_id;
 	decoding_packet->skb = skb;
-	memcpy(decoding_packet->prev_hop, ethhdr->h_source, ETH_ALEN);
-	memcpy(decoding_packet->next_hop, ethhdr->h_dest, ETH_ALEN);
 
-	/* TODO: Include id in hash_key */
-	for (i = 0; i < ETH_ALEN; ++i)
-		hash_key[i] = ethhdr->h_dest[i] ^ ethhdr->h_source[i];
-
-	i = choose_coding(hash_key, bat_priv->decoding_hash->size);
-
-	hash_added = hash_add(bat_priv->decoding_hash, compare_coding,
-			      choose_coding, hash_key,
-			      &decoding_packet->hash_entry);
-	if (hash_added < 0)
-		goto free_decoding_packet;
+	/* Add coding packet to list */
+	spin_lock_bh(&decoding_path->packet_list_lock);
+	list_add_tail_rcu(&decoding_packet->list, &decoding_path->packet_list);
+	spin_unlock_bh(&decoding_path->packet_list_lock);
 
 	atomic_inc(&bat_priv->decoding_hash_count);
 
@@ -236,7 +236,7 @@ free_decoding_packet:
 	kfree(decoding_packet);
 }
 
-static inline int purge_decoding_packet(struct coding_packet *decoding_packet)
+static inline int decoding_packet_timeout(struct coding_packet *decoding_packet)
 {
 	return time_is_before_jiffies(
 			decoding_packet->timestamp + DECODING_TIMEOUT * HZ);
@@ -245,10 +245,11 @@ static inline int purge_decoding_packet(struct coding_packet *decoding_packet)
 static void _purge_decoding(struct bat_priv *bat_priv)
 {
 	struct hashtable_t *hash = bat_priv->decoding_hash;
-	struct hlist_node *node, *node_tmp;
+	struct hlist_node *node;
 	struct hlist_head *head;
 	spinlock_t *list_lock; /* spinlock to protect write access */
-	struct coding_packet *decoding_packet;
+	struct coding_packet *decoding_packet, *decoding_packet_tmp;
+	struct coding_path *decoding_path;
 	int i;
 
 	if (!hash)
@@ -259,13 +260,17 @@ static void _purge_decoding(struct bat_priv *bat_priv)
 		list_lock = &hash->list_locks[i];
 
 		spin_lock_bh(list_lock);
-		hlist_for_each_entry_safe(decoding_packet, node, node_tmp,
-					  head, hash_entry) {
-			if (purge_decoding_packet(decoding_packet)) {
-				hlist_del_rcu(node);
-				coding_packet_free_ref(decoding_packet);
-				atomic_dec(&bat_priv->decoding_hash_count);
+		hlist_for_each_entry(decoding_path, node, head, hash_entry) {
+			spin_lock_bh(&decoding_path->packet_list_lock);
+			list_for_each_entry_safe(decoding_packet, decoding_packet_tmp,
+					&decoding_path->packet_list, list) {
+				if (decoding_packet_timeout(decoding_packet)) {
+					list_del_rcu(&decoding_packet->list);
+					coding_packet_free_ref(decoding_packet);
+					atomic_dec(&bat_priv->decoding_hash_count);
+				}
 			}
+			spin_unlock_bh(&decoding_path->packet_list_lock);
 		}
 		spin_unlock_bh(list_lock);
 	}
@@ -288,7 +293,8 @@ void decoding_free(struct bat_priv *bat_priv)
 	struct hlist_node *node, *node_tmp;
 	struct hlist_head *head;
 	spinlock_t *list_lock; /* spinlock to protect write access */
-	struct coding_packet *decoding_packet;
+	struct coding_packet *decoding_packet, *decoding_packet_tmp;
+	struct coding_path *decoding_path;
 	int i;
 
 	if (!decoding_hash)
@@ -302,12 +308,21 @@ void decoding_free(struct bat_priv *bat_priv)
 		list_lock = &decoding_hash->list_locks[i];
 
 		spin_lock_bh(list_lock);
-		hlist_for_each_entry_safe(decoding_packet, node, node_tmp,
+		hlist_for_each_entry_safe(decoding_path, node, node_tmp,
 					  head, hash_entry) {
 			hlist_del_rcu(node);
-			coding_packet_free_ref(decoding_packet);
+			spin_lock_bh(&decoding_path->packet_list_lock);
+			list_for_each_entry_safe(decoding_packet, 
+					decoding_packet_tmp, 
+					&decoding_path->packet_list, list) {
+				list_del_rcu(&decoding_packet->list);
+				coding_packet_free_ref(decoding_packet);
+			}
+			spin_unlock_bh(&decoding_path->packet_list_lock);
+			coding_path_free_ref(decoding_path);
 		}
 		spin_unlock_bh(list_lock);
+
 	}
 
 	hash_destroy(decoding_hash);
