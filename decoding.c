@@ -54,7 +54,7 @@ struct unicast_packet *decode_packet(struct sk_buff *skb,
 	if (skb_cow(skb, 0) < 0) {
 		printk(KERN_DEBUG "WOMBAT: skb_cow failed\n");
 		return NULL;
-	}                                                                                                                                                                                                                                                                                           
+	}
 
 	if (unlikely(!skb_pull_rcsum(skb, header_diff))) {
 		printk(KERN_DEBUG "WOMBAT: skb_pull_rcsum failed\n");
@@ -143,7 +143,7 @@ struct coding_packet *find_decoding_packet(struct bat_priv *bat_priv,
 	spin_lock_bh(list_lock);
 	hlist_for_each_entry(coding_path, hnode, &hash->table[index],
 			hash_entry) {
-		if (!compare_eth(dest, coding_path->next_hop))                                                                                                    
+		if (!compare_eth(dest, coding_path->next_hop))
 			continue;
 
 		if (!compare_eth(source, coding_path->prev_hop))
@@ -209,8 +209,8 @@ void add_decoding_skb(struct hard_iface *hard_iface, struct sk_buff *skb)
 	if (!decoding_packet)
 		return;
 
-	decoding_path = get_coding_path(bat_priv, ethhdr->h_source,
-			ethhdr->h_dest);
+	decoding_path = get_coding_path(bat_priv->decoding_hash,
+			ethhdr->h_source, ethhdr->h_dest);
 
 	if (!decoding_path)
 		goto free_decoding_packet;
@@ -222,6 +222,7 @@ void add_decoding_skb(struct hard_iface *hard_iface, struct sk_buff *skb)
 	decoding_packet->timestamp = jiffies;
 	decoding_packet->id = unicast_packet->decoding_id;
 	decoding_packet->skb = skb;
+	decoding_packet->coding_path = decoding_path;
 
 	/* Add coding packet to list */
 	spin_lock_bh(&decoding_path->packet_list_lock);

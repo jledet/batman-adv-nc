@@ -14,7 +14,7 @@ int add_coding_skb(struct sk_buff *skb, struct neigh_node *neigh_node,
 		struct ethhdr *ethhdr);
 void coding_packet_free_ref(struct coding_packet *coding_packet);
 void coding_path_free_ref(struct coding_path *coding_path);
-struct coding_path *get_coding_path(struct bat_priv *bat_priv, uint8_t *src,
+struct coding_path *get_coding_path(struct hashtable_t *hash, uint8_t *src,
 		uint8_t *dst);
 
 
@@ -55,10 +55,9 @@ static inline int compare_coding(struct hlist_node *node, void *data2)
 	return 1;
 }
 
-static inline struct coding_path *coding_hash_find(struct bat_priv *bat_priv,
+static inline struct coding_path *coding_hash_find(struct hashtable_t *hash,
 					       void *data)
 {
-	struct hashtable_t *hash = bat_priv->coding_hash;
 	struct hlist_head *head;
 	struct hlist_node *node;
 	struct coding_path *coding_path, *coding_path_tmp = NULL;

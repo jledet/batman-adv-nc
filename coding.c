@@ -3,6 +3,7 @@
 #include "originator.h"
 #include "coding.h"
 #include "hash.h"
+#include "linux/ip.h"
 
 int coding_thread(void *data);
 
@@ -132,11 +133,10 @@ static inline int coding_packet_timeout(struct coding_packet *coding_packet)
 	return timespec_compare(&coding_packet->timespec, &timeout) < 0 ? 1 : 0;
 }
 
-void coding_send_packet(struct coding_path *coding_path,
-		struct coding_packet *coding_packet)
+void coding_send_packet(struct coding_packet *coding_packet)
 {
 	send_skb_packet(coding_packet->skb, coding_packet->hard_iface,
-			coding_path->next_hop);
+			coding_packet->coding_path->next_hop);
 	coding_packet->skb = NULL;
 	coding_packet_free_ref(coding_packet);
 }
@@ -170,9 +170,9 @@ void work_coding_packets(struct bat_priv *bat_priv)
 			/* Loop packets */
 			list_for_each_entry_safe(coding_packet, coding_packet_tmp, &coding_path->packet_list, list) {
 				if (coding_packet_timeout(coding_packet)) {
-					hlist_del_rcu(node);
+					list_del_rcu(&coding_packet->list);
 					atomic_dec(&bat_priv->coding_hash_count);
-					coding_send_packet(coding_path, coding_packet);
+					coding_send_packet(coding_packet);
 				}
 			}
 			spin_unlock_bh(packet_list_lock);
@@ -211,7 +211,9 @@ void code_packets(struct sk_buff *skb, struct ethhdr *ethhdr,
 
 	/* Instead of zero padding the smallest data buffer, we
 	 * code into the largest. */
+	printk(KERN_DEBUG "CW: SKB: (%p > %p)\n", skb, coding_packet->skb);
 	if (skb->data_len >= coding_packet->skb->data_len) {
+		printk(KERN_DEBUG "CW: SKB1\n");
 		skb_dest = skb;
 		skb_src = coding_packet->skb;
 		first_dest = neigh_node->addr;
@@ -219,6 +221,7 @@ void code_packets(struct sk_buff *skb, struct ethhdr *ethhdr,
 		second_dest = coding_packet->coding_path->next_hop;
 		second_source = coding_packet->coding_path->prev_hop;
 	} else {
+		printk(KERN_DEBUG "CW: SKB2\n");
 		skb_dest = coding_packet->skb;
 		skb_src = skb;
 		first_dest = coding_packet->coding_path->next_hop;
@@ -227,6 +230,7 @@ void code_packets(struct sk_buff *skb, struct ethhdr *ethhdr,
 		second_source = ethhdr->h_source;
 	}
 
+	printk(KERN_DEBUG "CW: Setup coding packet\n");
 	data_len = skb_src->len - unicast_size - ETH_HLEN;
 	unicast_packet1 = (struct unicast_packet *)skb_dest->data;
 	unicast_packet2 = (struct unicast_packet *)skb_src->data;
@@ -236,6 +240,9 @@ void code_packets(struct sk_buff *skb, struct ethhdr *ethhdr,
 	printk(KERN_DEBUG "CW: Coding packets: %hu xor %hu (%02x xor %02x)\n",
 			unicast_packet1->decoding_id, unicast_packet2->decoding_id,
 			*byte1, *byte2);
+	printk(KERN_DEBUG "CW: checksums: %hu and %hu\n",
+			((struct iphdr *)skb_dest->data + unicast_size)->check,
+			((struct iphdr *)skb_src->data + unicast_size)->check);
 
 	if(skb_cow(skb_dest, header_add) < 0)
 		return;
@@ -299,6 +306,9 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 		hlist_for_each_entry_safe(coding_path, p_node, p_node_tmp,
 				&hash->table[index], hash_entry) {
 
+			if (list_empty(&coding_path->packet_list))
+				continue;
+
 			if (!compare_eth(coding_path->prev_hop,
 						in_coding_node->addr))
 				continue;
@@ -308,13 +318,19 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 				continue;
 
 			atomic_dec(&bat_priv->coding_hash_count);
-			coding_packet = 
-				list_first_entry(&coding_path->packet_list, 
+
+			spin_lock_bh(&coding_path->packet_list_lock);
+
+			coding_packet =
+				list_first_entry(&coding_path->packet_list,
 						struct coding_packet, list);
+
 			list_del_rcu(&coding_packet->list);
+			spin_unlock_bh(&coding_path->packet_list_lock);
+
 			spin_unlock_bh(lock);
 			rcu_read_unlock();
-			goto out;				
+			goto out;
 		}
 		spin_unlock_bh(lock);
 	}
@@ -355,7 +371,7 @@ out:
 	return 1;
 }
 
-struct coding_path *get_coding_path(struct bat_priv *bat_priv, uint8_t *src,
+struct coding_path *get_coding_path(struct hashtable_t *hash, uint8_t *src,
 		uint8_t *dst)
 {
 	int hash_added, i;
@@ -365,7 +381,7 @@ struct coding_path *get_coding_path(struct bat_priv *bat_priv, uint8_t *src,
 	for (i = 0; i < ETH_ALEN; ++i)
 		hash_key[i] = src[i] ^ dst[i];
 	
-	coding_path = coding_hash_find(bat_priv, hash_key);
+	coding_path = coding_hash_find(hash, hash_key);
 
 	if (coding_path)
 		return coding_path;
@@ -381,7 +397,7 @@ struct coding_path *get_coding_path(struct bat_priv *bat_priv, uint8_t *src,
 	memcpy(coding_path->next_hop, dst, ETH_ALEN);
 	memcpy(coding_path->prev_hop, src, ETH_ALEN);
 
-	hash_added = hash_add(bat_priv->coding_hash, compare_coding,
+	hash_added = hash_add(hash, compare_coding,
 			      choose_coding, hash_key,
 			      &coding_path->hash_entry);
 
@@ -417,7 +433,8 @@ int add_coding_skb(struct sk_buff *skb, struct neigh_node *neigh_node,
 	if (!coding_packet)
 		return NET_RX_DROP;
 
-	coding_path = get_coding_path(bat_priv, ethhdr->h_source, neigh_node->addr);
+	coding_path = get_coding_path(bat_priv->coding_hash,
+			ethhdr->h_source, neigh_node->addr);
 
 	if (!coding_path)
 		goto free_coding_packet;
@@ -429,6 +446,7 @@ int add_coding_skb(struct sk_buff *skb, struct neigh_node *neigh_node,
 	coding_packet->skb = skb;
 	coding_packet->hard_iface = neigh_node->if_incoming;
 	coding_packet->timespec = current_kernel_time();
+	coding_packet->coding_path = coding_path;
 
 	/* Add coding packet to list */
 	spin_lock_bh(&coding_path->packet_list_lock);

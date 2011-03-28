@@ -35,6 +35,7 @@
 #include <linux/etherdevice.h>
 #include <linux/if_vlan.h>
 #include "unicast.h"
+#include "linux/ip.h"
 
 
 static int bat_get_settings(struct net_device *dev, struct ethtool_cmd *cmd);
@@ -485,6 +486,8 @@ void interface_rx(struct net_device *soft_iface,
 
 	soft_iface->last_rx = jiffies;
 
+	printk(KERN_DEBUG "CW: checksum: %hu\n",
+			((struct iphdr *)skb->data)->check);
 	netif_rx(skb);
 	return;
 
