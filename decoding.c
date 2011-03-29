@@ -67,12 +67,16 @@ struct unicast_packet *decode_packet(struct sk_buff *skb,
 	memcpy(ethhdr, &ethhdr_tmp, sizeof(struct ethhdr));
 
 	if (is_my_mac(coded_packet_tmp.second_dest)) {
+		printk(KERN_DEBUG "CW: Me has second dest (len: %hu)\n",
+				ntohs(coded_packet_tmp.second_len));
 		memcpy(ethhdr->h_dest, coded_packet_tmp.second_dest, ETH_ALEN);
-		skb_trim(skb, coded_packet_tmp.second_len + header_size);
+		pskb_trim_rcsum(skb, ntohs(coded_packet_tmp.second_len) + header_size);
+		skb->len += ETH_HLEN;
 		orig_dest = coded_packet_tmp.second_orig_dest;
 		ttl = coded_packet_tmp.second_ttl;
 		id = coded_packet_tmp.second_id;
 	} else {
+		printk(KERN_DEBUG "CW: Me has first dest\n");
 		orig_dest = coded_packet_tmp.first_orig_dest;
 		ttl = coded_packet_tmp.first_ttl;
 		id = coded_packet_tmp.first_id;

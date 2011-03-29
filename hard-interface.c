@@ -627,6 +627,10 @@ static int batman_skb_recv(struct sk_buff *skb, struct net_device *dev,
 
 		/* unicast packet */
 	case BAT_UNICAST:
+		printk(KERN_DEBUG "WC: mac: %p, data: %p, len: %u\n",
+				skb_mac_header(skb),
+				skb->data,
+				skb->len);
 		ret = recv_unicast_packet(skb, hard_iface);
 		break;
 
