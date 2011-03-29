@@ -71,7 +71,6 @@ struct unicast_packet *decode_packet(struct sk_buff *skb,
 				ntohs(coded_packet_tmp.second_len));
 		memcpy(ethhdr->h_dest, coded_packet_tmp.second_dest, ETH_ALEN);
 		pskb_trim_rcsum(skb, ntohs(coded_packet_tmp.second_len) + header_size);
-		skb->len += ETH_HLEN;
 		orig_dest = coded_packet_tmp.second_orig_dest;
 		ttl = coded_packet_tmp.second_ttl;
 		id = coded_packet_tmp.second_id;
@@ -94,8 +93,8 @@ struct unicast_packet *decode_packet(struct sk_buff *skb,
 	unicast_packet->ttl = ttl;
 	unicast_packet->decoding_id = id;
 
-	byte1 = skb->data + header_size;
-	byte2 = decoding_packet->skb->data + header_size;
+	byte1 = skb->data + header_size + ETH_HLEN;
+	byte2 = decoding_packet->skb->data + header_size + ETH_HLEN;
 
 	printk(KERN_DEBUG "CW: Decoded: %hu xor %hu (%02x xor %02x)\n",
 			unicast_packet->decoding_id, decoding_packet->id,

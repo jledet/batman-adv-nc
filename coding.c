@@ -229,7 +229,7 @@ void code_packets(struct sk_buff *skb, struct ethhdr *ethhdr,
 
 	printk(KERN_DEBUG "CW: Setup coding packet (mac: %p, data: %p)\n",
 			skb_mac_header(skb_src), skb_src->data);
-	data_len = skb_src->len - unicast_size - ETH_HLEN;
+	data_len = skb_src->len - unicast_size;
 	unicast_packet1 = (struct unicast_packet *)skb_dest->data;
 	unicast_packet2 = (struct unicast_packet *)skb_src->data;
 	byte1 = skb_dest->data + unicast_size;

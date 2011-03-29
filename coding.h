@@ -3,7 +3,7 @@
 
 #include "hash.h"
 
-#define CODING_HOLD 1000 /* milliseconds */
+#define CODING_HOLD 5000 /* milliseconds */
 
 int coding_init(struct bat_priv *bat_priv);
 void coding_free(struct bat_priv *bat_priv);
