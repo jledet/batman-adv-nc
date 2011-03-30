@@ -3,7 +3,7 @@
 
 #include "hash.h"
 
-#define CODING_HOLD 5000 /* milliseconds */
+#define CODING_HOLD 100 /* milliseconds */
 
 int coding_init(struct bat_priv *bat_priv);
 void coding_free(struct bat_priv *bat_priv);
@@ -90,6 +90,23 @@ static inline void pretty_mac(char *asc, char *addr)
 	snprintf(asc, 18, "%02hhx:%02hhx:%02hhx:%02hhx:%02hhx:%02hhx",
 			addr[0], addr[1], addr[2],
 			addr[3], addr[4], addr[5]);
+}
+
+static inline void print_skb(struct sk_buff *skb)
+{
+	printk(KERN_DEBUG "CW: data: %p, tail: %u, th: %u, nh: %u, mh: %u, ipsum: %hhu, cloned: %hhu, df: %hhu, len: %u, dlen: %u, mlen: %hu, hlen: %hu\n",
+			skb->data,
+			skb->tail,
+			skb->transport_header,
+			skb->network_header,
+			skb->mac_header,
+			skb->ip_summed,
+			skb->cloned,
+			skb->local_df,
+			skb->len,
+			skb->data_len,
+			skb->mac_len,
+			skb->hdr_len);
 }
 
 static inline void memxor(char *data1, const char *data2, int len)

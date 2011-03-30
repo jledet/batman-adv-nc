@@ -227,18 +227,14 @@ void code_packets(struct sk_buff *skb, struct ethhdr *ethhdr,
 		second_source = ethhdr->h_source;
 	}
 
-	printk(KERN_DEBUG "CW: Setup coding packet (mac: %p, data: %p)\n",
-			skb_mac_header(skb_src), skb_src->data);
 	data_len = skb_src->len - unicast_size;
 	unicast_packet1 = (struct unicast_packet *)skb_dest->data;
 	unicast_packet2 = (struct unicast_packet *)skb_src->data;
-	byte1 = skb_dest->data + unicast_size;
-	byte2 = skb_src->data + unicast_size;
+	byte1 = skb_dest->data + skb_dest->len - 1;
+	byte2 = skb_src->data + skb_src->len - 1;
 
-	printk(KERN_DEBUG "CW: Coding packets: %hu xor %hu (%02x xor %02x)\n",
-			unicast_packet1->decoding_id, unicast_packet2->decoding_id,
-			*byte1, *byte2);
-	printk(KERN_DEBUG "Second length: %u\n", data_len);
+	printk(KERN_DEBUG "CW: Coding packets: %hu xor %hu\n",
+			unicast_packet1->decoding_id, unicast_packet2->decoding_id);
 
 	if(skb_cow(skb_dest, header_add) < 0)
 		return;

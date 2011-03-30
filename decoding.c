@@ -46,7 +46,6 @@ struct unicast_packet *decode_packet(struct sk_buff *skb,
 	struct ethhdr *ethhdr, ethhdr_tmp;
 	uint8_t *orig_dest, ttl;
 	uint16_t id;
-	uint8_t *byte1, *byte2;
 
 	memcpy(&coded_packet_tmp, skb->data, sizeof(struct coded_packet));
 	memcpy(&ethhdr_tmp, skb_mac_header(skb), sizeof(struct ethhdr));
@@ -67,15 +66,13 @@ struct unicast_packet *decode_packet(struct sk_buff *skb,
 	memcpy(ethhdr, &ethhdr_tmp, sizeof(struct ethhdr));
 
 	if (is_my_mac(coded_packet_tmp.second_dest)) {
-		printk(KERN_DEBUG "CW: Me has second dest (len: %hu)\n",
-				ntohs(coded_packet_tmp.second_len));
 		memcpy(ethhdr->h_dest, coded_packet_tmp.second_dest, ETH_ALEN);
 		pskb_trim_rcsum(skb, ntohs(coded_packet_tmp.second_len) + header_size);
+		skb->pkt_type = PACKET_HOST;
 		orig_dest = coded_packet_tmp.second_orig_dest;
 		ttl = coded_packet_tmp.second_ttl;
 		id = coded_packet_tmp.second_id;
 	} else {
-		printk(KERN_DEBUG "CW: Me has first dest\n");
 		orig_dest = coded_packet_tmp.first_orig_dest;
 		ttl = coded_packet_tmp.first_ttl;
 		id = coded_packet_tmp.first_id;
@@ -93,12 +90,9 @@ struct unicast_packet *decode_packet(struct sk_buff *skb,
 	unicast_packet->ttl = ttl;
 	unicast_packet->decoding_id = id;
 
-	byte1 = skb->data + header_size + ETH_HLEN;
-	byte2 = decoding_packet->skb->data + header_size + ETH_HLEN;
+	printk(KERN_DEBUG "CW: Decoded: %hu xor %hu\n",
+			unicast_packet->decoding_id, decoding_packet->id);
 
-	printk(KERN_DEBUG "CW: Decoded: %hu xor %hu (%02x xor %02x)\n",
-			unicast_packet->decoding_id, decoding_packet->id,
-			*byte1, *byte2);
 
 	return unicast_packet;
 }
@@ -131,9 +125,6 @@ struct coding_packet *find_decoding_packet(struct bat_priv *bat_priv,
 		source = coded_packet->first_source;
 		id = coded_packet->first_id;
 	}
-
-	printk(KERN_DEBUG "CW: Received packet: %hu xor %hu\n",
-			coded_packet->first_id, coded_packet->second_id);
 
 	/* TODO: Include id in hash_key */
 	for (i = 0; i < ETH_ALEN; ++i)
@@ -171,7 +162,6 @@ out:
 	list_del_rcu(&decoding_packet->list);
 	spin_unlock_bh(&coding_path->packet_list_lock);
 	spin_unlock_bh(list_lock);
-	printk(KERN_DEBUG "CW: Found decoding id %hu\n", decoding_packet->id);
 	return decoding_packet;
 }
 
