@@ -62,6 +62,7 @@ int send_skb_packet(struct sk_buff *skb,
 				uint8_t *dst_addr)
 {
 	struct ethhdr *ethhdr;
+	struct sk_buff *skb_decoding;
 
 	if (hard_iface->if_status != IF_ACTIVE)
 		goto send_skb_err;
@@ -92,7 +93,12 @@ int send_skb_packet(struct sk_buff *skb,
 	skb->dev = hard_iface->net_dev;
 
 	/* Store packet for later network decoding */
-	add_decoding_skb(hard_iface, skb_clone(skb, GFP_ATOMIC));
+	skb_decoding = skb_clone(skb, GFP_ATOMIC);
+
+	/* Adjust skb-data to point at batman-packet */
+	skb_pull_rcsum(skb_decoding, ETH_HLEN);
+
+	add_decoding_skb(hard_iface, skb_decoding);
 
 	/* dev_queue_xmit() returns a negative result on error.	 However on
 	 * congestion and traffic shaping, it drops and returns NET_XMIT_DROP

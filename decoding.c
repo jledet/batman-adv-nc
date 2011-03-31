@@ -51,12 +51,12 @@ struct unicast_packet *decode_packet(struct sk_buff *skb,
 	memcpy(&ethhdr_tmp, skb_mac_header(skb), sizeof(struct ethhdr));
 
 	if (skb_cow(skb, 0) < 0) {
-		printk(KERN_DEBUG "WOMBAT: skb_cow failed\n");
+		printk(KERN_DEBUG "CW: skb_cow failed\n");
 		return NULL;
 	}
 
 	if (unlikely(!skb_pull_rcsum(skb, header_diff))) {
-		printk(KERN_DEBUG "WOMBAT: skb_pull_rcsum failed\n");
+		printk(KERN_DEBUG "CW: skb_pull_rcsum failed\n");
 		return NULL;
 	}
 
@@ -154,7 +154,7 @@ struct coding_packet *find_decoding_packet(struct bat_priv *bat_priv,
 	}
 	spin_unlock_bh(list_lock);
 
-	printk(KERN_DEBUG "WOMBAT: No decoding packet found\n");
+	printk(KERN_DEBUG "CW: No decoding packet found\n");
 	return NULL;
 
 out:
@@ -188,7 +188,7 @@ void add_decoding_skb(struct hard_iface *hard_iface, struct sk_buff *skb)
 {
 	struct bat_priv *bat_priv = netdev_priv(hard_iface->soft_iface);
 	struct unicast_packet *unicast_packet =
-		(struct unicast_packet *)skb_network_header(skb);
+		(struct unicast_packet *)skb->data;
 	struct coding_packet *decoding_packet;
 	struct coding_path *decoding_path;
 	struct ethhdr *ethhdr = (struct ethhdr *)skb_mac_header(skb);
@@ -207,9 +207,6 @@ void add_decoding_skb(struct hard_iface *hard_iface, struct sk_buff *skb)
 
 	if (!decoding_path)
 		goto free_decoding_packet;
-
-	/* Adjust skb-data to point at batman-packet */
-	skb_pull_rcsum(skb, ETH_HLEN);
 
 	atomic_set(&decoding_packet->refcount, 1);
 	decoding_packet->timestamp = jiffies;

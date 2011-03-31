@@ -85,7 +85,7 @@ void coding_orig_neighbor(struct bat_priv *bat_priv,
 	pretty_mac(mac2, neigh_orig_node->orig);
 
 	if (!orig_has_neighbor(orig_node, neigh_orig_node)) {
-		printk(KERN_DEBUG "WOMBAT: Adding coding neighbor:\n");
+		printk(KERN_DEBUG "CW: Adding coding neighbor:\n");
 		printk(KERN_DEBUG "  %s -> %s\n", mac1, mac2);
 		if (add_coding_node(orig_node, neigh_orig_node) < 0) {
 			printk(KERN_DEBUG "Adding coding node failed\n");

@@ -422,13 +422,6 @@ void interface_rx(struct net_device *soft_iface,
 	struct vlan_ethhdr *vhdr;
 	short vid = -1;
 	int ret;
-	uint8_t type;
-	uint16_t id;
-
-
-	unicast_packet = (struct unicast_packet *)skb->data;
-	type = unicast_packet->packet_type;
-	id = unicast_packet->decoding_id;
 
 	/* check if enough space is available for pulling, and pull */
 	if (!pskb_may_pull(skb, hdr_size))
