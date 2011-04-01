@@ -195,12 +195,12 @@ void add_decoding_skb(struct hard_iface *hard_iface, struct sk_buff *skb)
 
 	/* We only handle unicast packets */
 	if (unicast_packet->packet_type != BAT_UNICAST)
-		return;
+		goto free_skb;
 
 	decoding_packet = kzalloc(sizeof(struct coding_packet), GFP_ATOMIC);
 
 	if (!decoding_packet)
-		return;
+		goto free_skb;
 
 	decoding_path = get_coding_path(bat_priv->decoding_hash,
 			ethhdr->h_source, ethhdr->h_dest);
@@ -225,6 +225,8 @@ void add_decoding_skb(struct hard_iface *hard_iface, struct sk_buff *skb)
 
 free_decoding_packet:
 	kfree(decoding_packet);
+free_skb:
+	dev_kfree_skb(skb);
 }
 
 static inline int decoding_packet_timeout(struct coding_packet *decoding_packet)
