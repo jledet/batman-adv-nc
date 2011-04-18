@@ -229,10 +229,12 @@ free_skb:
 	dev_kfree_skb(skb);
 }
 
-static inline int decoding_packet_timeout(struct coding_packet *decoding_packet)
+static inline int decoding_packet_timeout(struct bat_priv *bat_priv,
+		struct coding_packet *decoding_packet)
 {
 	return time_is_before_jiffies(
-			decoding_packet->timestamp + DECODING_TIMEOUT * HZ);
+			decoding_packet->timestamp + 
+			atomic_read(&bat_priv->catwoman_purge) * HZ);
 }
 
 static void _purge_decoding(struct bat_priv *bat_priv)
@@ -257,7 +259,7 @@ static void _purge_decoding(struct bat_priv *bat_priv)
 			spin_lock_bh(&decoding_path->packet_list_lock);
 			list_for_each_entry_safe(decoding_packet, decoding_packet_tmp,
 					&decoding_path->packet_list, list) {
-				if (decoding_packet_timeout(decoding_packet)) {
+				if (decoding_packet_timeout(bat_priv, decoding_packet)) {
 					list_del_rcu(&decoding_packet->list);
 					coding_packet_free_ref(decoding_packet);
 					atomic_dec(&bat_priv->decoding_hash_count);

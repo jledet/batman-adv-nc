@@ -124,10 +124,14 @@ void coding_path_free_ref(struct coding_path *coding_path)
 		call_rcu(&coding_path->rcu, coding_path_free_rcu);
 }
 
-static inline int coding_packet_timeout(struct coding_packet *coding_packet)
+static inline int coding_packet_timeout(struct bat_priv *bat_priv,
+		struct coding_packet *coding_packet)
 {
 	struct timespec now = current_kernel_time();
-	struct timespec timeout = {0, CODING_HOLD * NSEC_PER_MSEC};
+	struct timespec timeout = {
+		0, 
+		atomic_read(&bat_priv->catwoman_hold) * NSEC_PER_MSEC
+	};
 	timeout = timespec_sub(now, timeout);
 
 	return timespec_compare(&coding_packet->timespec, &timeout) < 0 ? 1 : 0;
@@ -169,7 +173,7 @@ void work_coding_packets(struct bat_priv *bat_priv)
 
 			/* Loop packets */
 			list_for_each_entry_safe(coding_packet, coding_packet_tmp, &coding_path->packet_list, list) {
-				if (coding_packet_timeout(coding_packet)) {
+				if (coding_packet_timeout(bat_priv, coding_packet)) {
 					list_del_rcu(&coding_packet->list);
 					atomic_dec(&bat_priv->coding_hash_count);
 					coding_send_packet(coding_packet);
@@ -186,7 +190,7 @@ int coding_thread(void *data)
 	struct bat_priv *bat_priv = (struct bat_priv *)data;
 
 	while (!kthread_should_stop()) {
-		msleep(CODING_HOLD);
+		msleep(atomic_read(&bat_priv->catwoman_hold));
 		work_coding_packets(bat_priv);
 	}
 
