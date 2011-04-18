@@ -92,23 +92,6 @@ static inline void pretty_mac(char *asc, char *addr)
 			addr[3], addr[4], addr[5]);
 }
 
-static inline void print_skb(struct sk_buff *skb)
-{
-	printk(KERN_DEBUG "CW: data: %p, tail: %u, th: %u, nh: %u, mh: %u, ipsum: %hhu, cloned: %hhu, df: %hhu, len: %u, dlen: %u, mlen: %hu, hlen: %hu\n",
-			skb->data,
-			skb->tail,
-			skb->transport_header,
-			skb->network_header,
-			skb->mac_header,
-			skb->ip_summed,
-			skb->cloned,
-			skb->local_df,
-			skb->len,
-			skb->data_len,
-			skb->mac_len,
-			skb->hdr_len);
-}
-
 static inline void memxor(char *data1, const char *data2, int len)
 {
 	int i;

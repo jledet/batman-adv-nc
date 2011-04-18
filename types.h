@@ -171,6 +171,9 @@ struct bat_priv {
 	atomic_t aggregated_ogms;	/* boolean */
 	atomic_t bonding;		/* boolean */
 	atomic_t fragmentation;		/* boolean */
+	atomic_t catwoman;		/* boolean */
+	atomic_t catwoman_hold;		/* uint */
+	atomic_t catwoman_purge;	/* uint */
 	atomic_t vis_mode;		/* VIS_TYPE_* */
 	atomic_t gw_mode;		/* GW_MODE_* */
 	atomic_t gw_sel_class;		/* uint */

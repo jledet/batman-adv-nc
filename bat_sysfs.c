@@ -371,10 +371,17 @@ static BAT_ATTR(gw_bandwidth, S_IRUGO | S_IWUSR, show_gw_bwidth,
 BAT_ATTR_UINT(log_level, S_IRUGO | S_IWUSR, 0, 3, NULL);
 #endif
 
+BAT_ATTR_BOOL(catwoman, S_IRUGO | S_IWUSR, NULL);
+BAT_ATTR_UINT(catwoman_hold, S_IRUGO | S_IWUSR, 0, 10000, NULL);
+BAT_ATTR_UINT(catwoman_purge, S_IRUGO | S_IWUSR, 0, 10000, NULL);
+
 static struct bat_attribute *mesh_attrs[] = {
 	&bat_attr_aggregated_ogms,
 	&bat_attr_bonding,
 	&bat_attr_fragmentation,
+	&bat_attr_catwoman,
+	&bat_attr_catwoman_hold,
+	&bat_attr_catwoman_purge,
 	&bat_attr_vis_mode,
 	&bat_attr_gw_mode,
 	&bat_attr_orig_interval,

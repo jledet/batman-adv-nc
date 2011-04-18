@@ -35,6 +35,8 @@
 #include <linux/etherdevice.h>
 #include <linux/if_vlan.h>
 #include "unicast.h"
+#include "coding.h"
+#include "decoding.h"
 
 static int bat_get_settings(struct net_device *dev, struct ethtool_cmd *cmd);
 static void bat_get_drvinfo(struct net_device *dev,
@@ -567,6 +569,9 @@ struct net_device *softif_create(char *name)
 
 	atomic_set(&bat_priv->aggregated_ogms, 1);
 	atomic_set(&bat_priv->bonding, 0);
+	atomic_set(&bat_priv->catwoman, 0);
+	atomic_set(&bat_priv->catwoman_hold, CODING_HOLD);
+	atomic_set(&bat_priv->catwoman_purge, DECODING_TIMEOUT);
 	atomic_set(&bat_priv->vis_mode, VIS_TYPE_CLIENT_UPDATE);
 	atomic_set(&bat_priv->gw_mode, GW_MODE_OFF);
 	atomic_set(&bat_priv->gw_sel_class, 20);
