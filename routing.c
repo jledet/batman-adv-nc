@@ -785,14 +785,14 @@ void receive_bat_packet(struct ethhdr *ethhdr,
 	/* if this OGM seqno equals last orig_node's seqno, OGM ttl
 	 * is only decremented by one, we add a coding possibility
 	 * and originator is our neighbor */
-	if ((orig_node->last_real_seqno == batman_packet->seqno) &&
-			(orig_node->last_ttl == batman_packet->ttl + 1) &&
-			compare_eth(batman_packet->orig,
-				batman_packet->prev_sender))
-		coding_orig_neighbor(bat_priv, orig_node, orig_neigh_node);
+	if (atomic_read(&bat_priv->catwoman))
+		if ((orig_node->last_real_seqno == batman_packet->seqno)
+				&& (orig_node->last_ttl == batman_packet->ttl + 1) 
+				&& compare_eth(batman_packet->orig, batman_packet->prev_sender))
+			coding_orig_neighbor(bat_priv, orig_node, orig_neigh_node);
 
 	/* Add orig as coding node to itself */
-	if (is_single_hop_neigh)
+	if (atomic_read(&bat_priv->catwoman) && is_single_hop_neigh)
 		coding_orig_neighbor(bat_priv, orig_node, orig_node);
 
 	bonding_save_primary(orig_node, orig_neigh_node, batman_packet);
@@ -1348,7 +1348,8 @@ int route_unicast_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 	unicast_packet->ttl--;
 
 	/* Code packet if possible */
-	add_coding_skb(skb, neigh_node, ethhdr);
+	if (atomic_read(&bat_priv->catwoman))
+		add_coding_skb(skb, neigh_node, ethhdr);
 
 	/* route it */
 	/* send_skb_packet(skb, neigh_node->if_incoming, neigh_node->addr); */

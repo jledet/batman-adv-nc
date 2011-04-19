@@ -647,7 +647,10 @@ static int batman_skb_recv(struct sk_buff *skb, struct net_device *dev,
 
 		/* coded packet */
 	case BAT_CODED:
-		ret = recv_coded_packet(skb, hard_iface);
+		if (atomic_read(&bat_priv->catwoman))
+			ret = recv_coded_packet(skb, hard_iface);
+		else
+			ret = NET_RX_DROP;
 		break;
 
 	default:
