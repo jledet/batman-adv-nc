@@ -234,7 +234,7 @@ static inline int decoding_packet_timeout(struct bat_priv *bat_priv,
 {
 	return time_is_before_jiffies(
 			decoding_packet->timestamp + 
-			atomic_read(&bat_priv->catwoman_purge) * HZ);
+			(atomic_read(&bat_priv->catwoman_purge) * HZ) / MSEC_PER_SEC);
 }
 
 static void _purge_decoding(struct bat_priv *bat_priv)

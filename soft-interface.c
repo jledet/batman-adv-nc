@@ -569,7 +569,7 @@ struct net_device *softif_create(char *name)
 
 	atomic_set(&bat_priv->aggregated_ogms, 1);
 	atomic_set(&bat_priv->bonding, 0);
-	atomic_set(&bat_priv->catwoman, 0);
+	atomic_set(&bat_priv->catwoman, 1);
 	atomic_set(&bat_priv->catwoman_hold, CODING_HOLD);
 	atomic_set(&bat_priv->catwoman_purge, DECODING_TIMEOUT);
 	atomic_set(&bat_priv->vis_mode, VIS_TYPE_CLIENT_UPDATE);
