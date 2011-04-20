@@ -3,6 +3,7 @@
 
 #include "hash.h"
 
+#define CATWOMAN_ENABLED 1 /* CATWOMAN enabled as default */
 #define CODING_HOLD 10 /* milliseconds */
 
 int coding_init(struct bat_priv *bat_priv);
