@@ -69,8 +69,6 @@ static inline struct coding_path *coding_hash_find(struct hashtable_t *hash,
 	index = choose_coding(data, hash->size);
 	head = &hash->table[index];
 
-	printk(KERN_DEBUG "Searching bin %i", index);
-
 	rcu_read_lock();
 	hlist_for_each_entry_rcu(coding_path, node, head, hash_entry) {
 		if (!compare_coding(node, data))

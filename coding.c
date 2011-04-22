@@ -246,8 +246,6 @@ void code_packets(struct sk_buff *skb, struct ethhdr *ethhdr,
 
 	printk(KERN_DEBUG "CW: Coding packets: %hu xor %hu\n",
 			unicast_packet1->decoding_id, unicast_packet2->decoding_id);
-	printk(KERN_DEBUG "  %pM > %pM", first_dest, first_source);
-	printk(KERN_DEBUG "  %pM > %pM", second_dest, second_source);
 
 	if(skb_cow(skb_dest, header_add) < 0)
 		return;
@@ -281,6 +279,9 @@ void code_packets(struct sk_buff *skb, struct ethhdr *ethhdr,
 	memxor((char *)unicast_packet1 + unicast_size, (char *)unicast_packet2 + unicast_size,
 			data_len);
 
+	dev_kfree_skb(skb_src);
+	coding_packet->skb = NULL;
+	coding_packet_free_ref(coding_packet);
 	send_skb_packet(skb_dest, neigh_node->if_incoming, first_dest);
 }
 
@@ -358,6 +359,9 @@ int send_coded_packet(struct sk_buff *skb,
 	rcu_read_lock();
 	hlist_for_each_entry_rcu(coding_node, node,
 			&orig_node->in_coding_list, list) {
+		if (compare_eth(coding_node->addr, ethhdr->h_source))
+			continue;
+
 		coding_packet =
 			find_coding_packet(bat_priv, coding_node, ethhdr);
 
@@ -388,10 +392,8 @@ struct coding_path *get_coding_path(struct hashtable_t *hash, uint8_t *src,
 	
 	coding_path = coding_hash_find(hash, hash_key);
 
-	if (coding_path) {
-		printk(KERN_DEBUG "CW: Found coding path");
+	if (coding_path)
 		return coding_path;
-	}
 
 	coding_path = kzalloc(sizeof(struct coding_path), GFP_ATOMIC);
 
@@ -404,7 +406,6 @@ struct coding_path *get_coding_path(struct hashtable_t *hash, uint8_t *src,
 	memcpy(coding_path->next_hop, dst, ETH_ALEN);
 	memcpy(coding_path->prev_hop, src, ETH_ALEN);
 
-	printk(KERN_DEBUG "CW: Added path: %pM > %pM to bin %i", src, dst, choose_coding(hash_key, 1024));
 
 	hash_added = hash_add(hash, compare_coding,
 			      choose_coding, hash_key,
