@@ -569,7 +569,8 @@ struct net_device *softif_create(char *name)
 
 	atomic_set(&bat_priv->aggregated_ogms, 1);
 	atomic_set(&bat_priv->bonding, 0);
-	atomic_set(&bat_priv->catwoman, 1);
+	atomic_set(&bat_priv->catwoman, CATWOMAN_ENABLED);
+	atomic_set(&bat_priv->catwoman_promisc, 0);
 	atomic_set(&bat_priv->catwoman_hold, CODING_HOLD);
 	atomic_set(&bat_priv->catwoman_purge, DECODING_TIMEOUT);
 	atomic_set(&bat_priv->vis_mode, VIS_TYPE_CLIENT_UPDATE);
@@ -602,6 +603,8 @@ struct net_device *softif_create(char *name)
 	ret = mesh_init(soft_iface);
 	if (ret < 0)
 		goto unreg_debugfs;
+
+	update_promisc(soft_iface);
 
 	return soft_iface;
 

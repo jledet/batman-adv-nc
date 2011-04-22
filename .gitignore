@@ -1,0 +1,11 @@
+.lvimrc
+*.swp
+*.swo
+*.o
+*.o.cmd
+*.symvers
+*.ko
+*.ko.cmd
+*.mod.c
+*.order
+.tmp_versions

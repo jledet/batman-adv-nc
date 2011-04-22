@@ -4,6 +4,9 @@
 #include "send.h"
 #include "originator.h"
 #include "hash.h"
+#include <linux/netdevice.h>
+#include <net/sch_generic.h>
+#include <linux/rtnetlink.h>
 
 static void purge_decoding(struct work_struct *work);
 
@@ -247,6 +250,14 @@ static void _purge_decoding(struct bat_priv *bat_priv)
 	struct coding_path *decoding_path;
 	int i;
 
+	struct net_device *netdev = bat_priv->primary_if->net_dev;
+	int numq = netdev->num_tx_queues;
+	for (i = 0; i < numq; i++) {
+		struct netdev_queue *netq = netdev_get_tx_queue(netdev, i);
+		int qlen = qdisc_qlen(netq->qdisc);
+		printk(KERN_INFO "%s tx queue %d lenght: %d\r\n", netdev->name, i, qlen);
+	}
+
 	if (!hash)
 		return;
 
@@ -323,4 +334,17 @@ void decoding_free(struct bat_priv *bat_priv)
 	hash_destroy(decoding_hash);
 }
 
+void update_promisc(struct net_device *soft_iface)
+{
+	struct bat_priv *bat_priv = netdev_priv(soft_iface);
+	struct net_device *hard_iface = bat_priv->primary_if->net_dev;
+	int catwoman = atomic_read(&bat_priv->catwoman);
+	int promisc = atomic_read(&bat_priv->catwoman_promisc);
 
+	if (catwoman != promisc) {
+		rtnl_lock();
+		dev_set_promiscuity(hard_iface, catwoman ? 1 : -1);
+		rtnl_unlock();
+		atomic_set(&bat_priv->catwoman_promisc, catwoman);
+	}
+}

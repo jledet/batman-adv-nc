@@ -27,6 +27,7 @@
 #include "gateway_common.h"
 #include "gateway_client.h"
 #include "vis.h"
+#include "decoding.h"
 
 #define to_dev(obj)		container_of(obj, struct device, kobj)
 #define kobj_to_netdev(obj)	to_net_dev(to_dev(obj->parent))
@@ -371,7 +372,7 @@ static BAT_ATTR(gw_bandwidth, S_IRUGO | S_IWUSR, show_gw_bwidth,
 BAT_ATTR_UINT(log_level, S_IRUGO | S_IWUSR, 0, 3, NULL);
 #endif
 
-BAT_ATTR_BOOL(catwoman, S_IRUGO | S_IWUSR, NULL);
+BAT_ATTR_BOOL(catwoman, S_IRUGO | S_IWUSR, update_promisc);
 BAT_ATTR_UINT(catwoman_hold, S_IRUGO | S_IWUSR, 0, 10000, NULL);
 BAT_ATTR_UINT(catwoman_purge, S_IRUGO | S_IWUSR, 0, 10000, NULL);
 
