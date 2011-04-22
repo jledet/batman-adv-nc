@@ -29,6 +29,7 @@
 #include "originator.h"
 #include "hash.h"
 #include "coding.h"
+#include "decoding.h"
 
 #include <linux/if_arp.h>
 
@@ -146,6 +147,7 @@ static void set_primary_if(struct bat_priv *bat_priv,
 	batman_packet->ttl = TTL;
 
 	update_primary_addr(bat_priv);
+	update_promisc(hard_iface->soft_iface);
 
 	/***
 	 * hacky trick to make sure that we send the HNA information via

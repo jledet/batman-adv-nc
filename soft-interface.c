@@ -604,8 +604,6 @@ struct net_device *softif_create(char *name)
 	if (ret < 0)
 		goto unreg_debugfs;
 
-	update_promisc(soft_iface);
-
 	return soft_iface;
 
 unreg_debugfs:

@@ -252,6 +252,7 @@ static void _purge_decoding(struct bat_priv *bat_priv)
 
 	struct net_device *netdev = bat_priv->primary_if->net_dev;
 	int numq = netdev->num_tx_queues;
+	printk(KERN_INFO "real number of tx queues: %d\r\n", netdev->real_num_tx_queues);
 	for (i = 0; i < numq; i++) {
 		struct netdev_queue *netq = netdev_get_tx_queue(netdev, i);
 		int qlen = qdisc_qlen(netq->qdisc);
@@ -336,10 +337,16 @@ void decoding_free(struct bat_priv *bat_priv)
 
 void update_promisc(struct net_device *soft_iface)
 {
+	int catwoman, promisc;
+	struct net_device *hard_iface;
 	struct bat_priv *bat_priv = netdev_priv(soft_iface);
-	struct net_device *hard_iface = bat_priv->primary_if->net_dev;
-	int catwoman = atomic_read(&bat_priv->catwoman);
-	int promisc = atomic_read(&bat_priv->catwoman_promisc);
+		
+	if (!bat_priv || !bat_priv->primary_if || !bat_priv->primary_if->net_dev)
+		return;
+
+	hard_iface = bat_priv->primary_if->net_dev;
+	catwoman = atomic_read(&bat_priv->catwoman);
+	promisc = atomic_read(&bat_priv->catwoman_promisc);
 
 	if (catwoman != promisc) {
 		rtnl_lock();
