@@ -165,6 +165,10 @@ struct coding_packet {
 	struct coding_path *coding_path;
 };
 
+struct bat_skb_cb {
+	uint8_t decoded;
+};
+
 struct bat_priv {
 	atomic_t mesh_state;
 	struct net_device_stats stats;

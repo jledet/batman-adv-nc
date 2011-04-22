@@ -3,7 +3,6 @@
 #include "originator.h"
 #include "coding.h"
 #include "hash.h"
-#include "linux/ip.h"
 
 int coding_thread(void *data);
 
@@ -77,18 +76,29 @@ int add_coding_node(struct orig_node *orig_node,
 
 void coding_orig_neighbor(struct bat_priv *bat_priv,
 		struct orig_node *orig_node,
-		struct orig_node *neigh_orig_node)
+		struct orig_node *neigh_orig_node,
+		struct batman_packet *batman_packet)
 {
-	uint8_t mac1[18], mac2[18];
+	uint8_t mac1[18], mac2[18], mac3[18];
 
-	pretty_mac(mac1, orig_node->orig);
-	pretty_mac(mac2, neigh_orig_node->orig);
 
 	if (!orig_has_neighbor(orig_node, neigh_orig_node)) {
+		pretty_mac(mac1, orig_node->orig);
+		pretty_mac(mac2, neigh_orig_node->orig);
+		pretty_mac(mac3, batman_packet->prev_sender);
+
 		printk(KERN_DEBUG "CW: Adding coding neighbor:\n");
 		printk(KERN_DEBUG "  %s -> %s\n", mac1, mac2);
+		printk(KERN_DEBUG "  ttl: %hhu + 1 == %hhu\n",
+				batman_packet->ttl,
+				orig_node->last_ttl);
+		printk(KERN_DEBUG "  seqno: %u == %u\n",
+				batman_packet->seqno,
+				orig_node->last_real_seqno);
+		printk(KERN_DEBUG "  prev_sender: %s\n", mac3);
+
 		if (add_coding_node(orig_node, neigh_orig_node) < 0) {
-			printk(KERN_DEBUG "Adding coding node failed\n");
+			printk(KERN_DEBUG "  Adding coding node failed\n");
 		}
 	}
 }
@@ -211,7 +221,6 @@ void code_packets(struct sk_buff *skb, struct ethhdr *ethhdr,
 	struct unicast_packet *unicast_packet2;
 	struct coded_packet *coded_packet;
 	uint8_t *first_source, *first_dest, *second_source, *second_dest;
-	uint8_t *byte1, *byte2;
 
 	/* Instead of zero padding the smallest data buffer, we
 	 * code into the largest. */
@@ -234,11 +243,11 @@ void code_packets(struct sk_buff *skb, struct ethhdr *ethhdr,
 	data_len = skb_src->len - unicast_size;
 	unicast_packet1 = (struct unicast_packet *)skb_dest->data;
 	unicast_packet2 = (struct unicast_packet *)skb_src->data;
-	byte1 = skb_dest->data + skb_dest->len - 1;
-	byte2 = skb_src->data + skb_src->len - 1;
 
 	printk(KERN_DEBUG "CW: Coding packets: %hu xor %hu\n",
 			unicast_packet1->decoding_id, unicast_packet2->decoding_id);
+	printk(KERN_DEBUG "  %pM > %pM", first_dest, first_source);
+	printk(KERN_DEBUG "  %pM > %pM", second_dest, second_source);
 
 	if(skb_cow(skb_dest, header_add) < 0)
 		return;
@@ -294,7 +303,7 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 		/* Create almost unique path key */
 		for (i = 0; i < ETH_ALEN; ++i)
 			hash_key[i] =
-				out_coding_node->addr[i] ^ in_coding_node->addr[i];
+				in_coding_node->addr[i] ^ out_coding_node->addr[ETH_ALEN-1-i];
 		index = choose_coding(hash_key, hash->size);
 		lock = &hash->list_locks[index];
 
@@ -375,12 +384,14 @@ struct coding_path *get_coding_path(struct hashtable_t *hash, uint8_t *src,
 	struct coding_path *coding_path;
 
 	for (i = 0; i < ETH_ALEN; ++i)
-		hash_key[i] = src[i] ^ dst[i];
+		hash_key[i] = src[i] ^ dst[ETH_ALEN-1-i];
 	
 	coding_path = coding_hash_find(hash, hash_key);
 
-	if (coding_path)
+	if (coding_path) {
+		printk(KERN_DEBUG "CW: Found coding path");
 		return coding_path;
+	}
 
 	coding_path = kzalloc(sizeof(struct coding_path), GFP_ATOMIC);
 
@@ -392,6 +403,8 @@ struct coding_path *get_coding_path(struct hashtable_t *hash, uint8_t *src,
 	atomic_set(&coding_path->refcount, 1);
 	memcpy(coding_path->next_hop, dst, ETH_ALEN);
 	memcpy(coding_path->prev_hop, src, ETH_ALEN);
+
+	printk(KERN_DEBUG "CW: Added path: %pM > %pM to bin %i", src, dst, choose_coding(hash_key, 1024));
 
 	hash_added = hash_add(hash, compare_coding,
 			      choose_coding, hash_key,

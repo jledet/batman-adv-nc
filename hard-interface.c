@@ -629,6 +629,7 @@ static int batman_skb_recv(struct sk_buff *skb, struct net_device *dev,
 
 		/* unicast packet */
 	case BAT_UNICAST:
+		((struct bat_skb_cb *)skb->cb)->decoded = 0;
 		ret = recv_unicast_packet(skb, hard_iface);
 		break;
 
