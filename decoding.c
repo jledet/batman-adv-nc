@@ -128,7 +128,7 @@ struct coding_packet *find_decoding_packet(struct bat_priv *bat_priv,
 
 	/* TODO: Include id in hash_key */
 	for (i = 0; i < ETH_ALEN; ++i)
-		hash_key[i] = dest[i] ^ source[i];
+		hash_key[i] = source[i] ^ dest[ETH_ALEN-1-i];
 
 	index = choose_coding(hash_key, hash->size);
 	list_lock = &hash->list_locks[index];

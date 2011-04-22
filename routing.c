@@ -734,6 +734,24 @@ void receive_bat_packet(struct ethhdr *ethhdr,
 	if (!orig_node)
 		return;
 
+	/* if sender is a direct neighbor the sender mac equals
+	 * originator mac */
+	orig_neigh_node = (is_single_hop_neigh ?
+			   orig_node :
+			   get_orig_node(bat_priv, ethhdr->h_source));
+	if (!orig_neigh_node)
+		goto out;
+
+	/* if this OGM seqno equals last orig_node's seqno, OGM ttl
+	 * is only decremented by one, we add a coding possibility
+	 * and originator is our neighbor */
+	if (atomic_read(&bat_priv->catwoman))
+		if ((orig_node->last_real_seqno == batman_packet->seqno)
+				&& (orig_node->last_ttl == batman_packet->ttl + 1) 
+				&& compare_eth(batman_packet->orig, batman_packet->prev_sender)) {
+			coding_orig_neighbor(bat_priv, orig_node, orig_neigh_node, batman_packet);
+		}
+
 	is_duplicate = count_real_packets(ethhdr, batman_packet, if_incoming);
 
 	if (is_duplicate == -1) {
@@ -763,14 +781,6 @@ void receive_bat_packet(struct ethhdr *ethhdr,
 		goto out;
 	}
 
-	/* if sender is a direct neighbor the sender mac equals
-	 * originator mac */
-	orig_neigh_node = (is_single_hop_neigh ?
-			   orig_node :
-			   get_orig_node(bat_priv, ethhdr->h_source));
-	if (!orig_neigh_node)
-		goto out;
-
 	/* drop packet if sender is not a direct neighbor and if we
 	 * don't route towards it */
 	if (!is_single_hop_neigh && (!orig_neigh_node->router)) {
@@ -782,18 +792,9 @@ void receive_bat_packet(struct ethhdr *ethhdr,
 	is_bidirectional = is_bidirectional_neigh(orig_node, orig_neigh_node,
 						batman_packet, if_incoming);
 
-	/* if this OGM seqno equals last orig_node's seqno, OGM ttl
-	 * is only decremented by one, we add a coding possibility
-	 * and originator is our neighbor */
-	if (atomic_read(&bat_priv->catwoman))
-		if ((orig_node->last_real_seqno == batman_packet->seqno)
-				&& (orig_node->last_ttl == batman_packet->ttl + 1) 
-				&& compare_eth(batman_packet->orig, batman_packet->prev_sender))
-			coding_orig_neighbor(bat_priv, orig_node, orig_neigh_node);
-
 	/* Add orig as coding node to itself */
 	if (atomic_read(&bat_priv->catwoman) && is_single_hop_neigh)
-		coding_orig_neighbor(bat_priv, orig_node, orig_node);
+		coding_orig_neighbor(bat_priv, orig_node, orig_node, batman_packet);
 
 	bonding_save_primary(orig_node, orig_neigh_node, batman_packet);
 
@@ -1348,7 +1349,7 @@ int route_unicast_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 	unicast_packet->ttl--;
 
 	/* Code packet if possible */
-	if (atomic_read(&bat_priv->catwoman))
+	if (atomic_read(&bat_priv->catwoman) && !((struct bat_skb_cb *)skb->cb)->decoded)
 		add_coding_skb(skb, neigh_node, ethhdr);
 	else
 		send_skb_packet(skb, neigh_node->if_incoming, neigh_node->addr);
@@ -1580,14 +1581,21 @@ int recv_coded_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 	coded_packet = (struct coded_packet *)skb->data;
 	ethhdr = (struct ethhdr *)skb_mac_header(skb);
 
+	printk(KERN_DEBUG "CW: Received coded packet from %pM", ethhdr->h_source);
+
 	/* Verify frame is destined for us */
-	if (!is_my_mac(ethhdr->h_dest) && !is_my_mac(coded_packet->second_dest))
+	if (!is_my_mac(ethhdr->h_dest) && !is_my_mac(coded_packet->second_dest)) {
+		printk(KERN_DEBUG "  ... but not for me: %pM & %pM",
+				ethhdr->h_dest, coded_packet->second_dest);
 		return NET_RX_DROP;
+	}
 
 	unicast_packet = receive_coded_packet(bat_priv, skb, hdr_size);
 
 	if (!unicast_packet)
 		return NET_RX_DROP;
 
+	/* Mark packet as decoded to avoid recoding when forwarding */
+	((struct bat_skb_cb *)skb->cb)->decoded = 1;
 	return recv_unicast_packet(skb, recv_if);
 }

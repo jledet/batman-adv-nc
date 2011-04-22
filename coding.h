@@ -9,7 +9,8 @@ int coding_init(struct bat_priv *bat_priv);
 void coding_free(struct bat_priv *bat_priv);
 void coding_orig_neighbor(struct bat_priv *bat_priv,
 		struct orig_node *orig_node,
-		struct orig_node *neigh_node);
+		struct orig_node *neigh_node,
+		struct batman_packet *batman_packet);
 int add_coding_skb(struct sk_buff *skb, struct neigh_node *neigh_node,
 		struct ethhdr *ethhdr);
 void coding_packet_free_ref(struct coding_packet *coding_packet);
@@ -39,20 +40,18 @@ static inline int choose_coding(void *data, int32_t size)
 
 static inline int compare_coding(struct hlist_node *node, void *data2)
 {
-	struct coding_path *coding_path1 =
+	struct coding_path *coding_path =
 		container_of(node, struct coding_path, hash_entry);
-	struct coding_path *coding_path2 =
-		(struct coding_path *)data2;
+	int i;
+	uint8_t hash_key[ETH_ALEN];
 
-	if (memcmp(coding_path1->next_hop,
-				coding_path2->next_hop, ETH_ALEN))
-		return 0;
+	for (i = 0; i < ETH_ALEN; i++)
+		hash_key[i] = coding_path->prev_hop[i] ^ coding_path->next_hop[ETH_ALEN-1-i];
 
-	if (memcmp(coding_path1->prev_hop,
-				coding_path2->prev_hop, ETH_ALEN))
-		return 0;
+	if (compare_eth(hash_key, data2))
+		return 1;
 
-	return 1;
+	return 0;
 }
 
 static inline struct coding_path *coding_hash_find(struct hashtable_t *hash,
@@ -69,13 +68,17 @@ static inline struct coding_path *coding_hash_find(struct hashtable_t *hash,
 	index = choose_coding(data, hash->size);
 	head = &hash->table[index];
 
+	printk(KERN_DEBUG "Searching bin %i", index);
+
 	rcu_read_lock();
 	hlist_for_each_entry_rcu(coding_path, node, head, hash_entry) {
 		if (!compare_coding(node, data))
 			continue;
 
+		/*
 		if (!atomic_inc_not_zero(&coding_path->refcount))
 			continue;
+		*/
 
 		coding_path_tmp = coding_path;
 		break;
