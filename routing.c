@@ -1581,14 +1581,9 @@ int recv_coded_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 	coded_packet = (struct coded_packet *)skb->data;
 	ethhdr = (struct ethhdr *)skb_mac_header(skb);
 
-	printk(KERN_DEBUG "CW: Received coded packet from %pM", ethhdr->h_source);
-
 	/* Verify frame is destined for us */
-	if (!is_my_mac(ethhdr->h_dest) && !is_my_mac(coded_packet->second_dest)) {
-		printk(KERN_DEBUG "  ... but not for me: %pM & %pM",
-				ethhdr->h_dest, coded_packet->second_dest);
+	if (!is_my_mac(ethhdr->h_dest) && !is_my_mac(coded_packet->second_dest))
 		return NET_RX_DROP;
-	}
 
 	unicast_packet = receive_coded_packet(bat_priv, skb, hdr_size);
 
