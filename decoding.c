@@ -252,11 +252,11 @@ static void _purge_decoding(struct bat_priv *bat_priv)
 
 	struct net_device *netdev = bat_priv->primary_if->net_dev;
 	int numq = netdev->num_tx_queues;
-	printk(KERN_INFO "real number of tx queues: %d\r\n", netdev->real_num_tx_queues);
 	for (i = 0; i < numq; i++) {
 		struct netdev_queue *netq = netdev_get_tx_queue(netdev, i);
 		int qlen = qdisc_qlen(netq->qdisc);
-		printk(KERN_INFO "%s tx queue %d lenght: %d\r\n", netdev->name, i, qlen);
+		printk(KERN_INFO "%s tx queue %d uses %d of %lu packets\r\n",
+				netdev->name, i, qlen, netdev->tx_queue_len);
 	}
 
 	if (!hash)
