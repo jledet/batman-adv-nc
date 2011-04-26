@@ -79,23 +79,10 @@ void coding_orig_neighbor(struct bat_priv *bat_priv,
 		struct orig_node *neigh_orig_node,
 		struct batman_packet *batman_packet)
 {
-	uint8_t mac1[18], mac2[18], mac3[18];
-
-
 	if (!orig_has_neighbor(orig_node, neigh_orig_node)) {
-		pretty_mac(mac1, orig_node->orig);
-		pretty_mac(mac2, neigh_orig_node->orig);
-		pretty_mac(mac3, batman_packet->prev_sender);
-
 		printk(KERN_DEBUG "CW: Adding coding neighbor:\n");
-		printk(KERN_DEBUG "  %s -> %s\n", mac1, mac2);
-		printk(KERN_DEBUG "  ttl: %hhu + 1 == %hhu\n",
-				batman_packet->ttl,
-				orig_node->last_ttl);
-		printk(KERN_DEBUG "  seqno: %u == %u\n",
-				batman_packet->seqno,
-				orig_node->last_real_seqno);
-		printk(KERN_DEBUG "  prev_sender: %s\n", mac3);
+		printk(KERN_DEBUG "  %pM -> %pM\n", orig_node->orig,
+				neigh_orig_node->orig);
 
 		if (add_coding_node(orig_node, neigh_orig_node) < 0) {
 			printk(KERN_DEBUG "  Adding coding node failed\n");
@@ -149,7 +136,7 @@ static inline int coding_packet_timeout(struct bat_priv *bat_priv,
 
 void coding_send_packet(struct coding_packet *coding_packet)
 {
-	send_skb_packet(coding_packet->skb, coding_packet->hard_iface,
+	send_skb_packet(coding_packet->skb, coding_packet->neigh_node->if_incoming,
 			coding_packet->coding_path->next_hop);
 	coding_packet->skb = NULL;
 	coding_packet_free_ref(coding_packet);
@@ -224,6 +211,10 @@ void code_packets(struct sk_buff *skb, struct ethhdr *ethhdr,
 
 	/* Instead of zero padding the smallest data buffer, we
 	 * code into the largest. */
+
+	printk(KERN_DEBUG "CW: tq1: %hhu, tq2: %hhu", neigh_node->tq_avg,
+			coding_packet->neigh_node->tq_avg);
+
 	if (skb->len >= coding_packet->skb->len) {
 		skb_dest = skb;
 		skb_src = coding_packet->skb;
@@ -454,7 +445,7 @@ int add_coding_skb(struct sk_buff *skb, struct neigh_node *neigh_node,
 	coding_packet->timestamp = jiffies;
 	coding_packet->id = unicast_packet->decoding_id;
 	coding_packet->skb = skb;
-	coding_packet->hard_iface = neigh_node->if_incoming;
+	coding_packet->neigh_node = neigh_node;
 	coding_packet->timespec = current_kernel_time();
 	coding_packet->coding_path = coding_path;
 

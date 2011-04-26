@@ -160,7 +160,7 @@ struct coding_packet {
 	uint16_t id;
 	unsigned long timestamp;
 	struct timespec timespec;
-	struct hard_iface *hard_iface;
+	struct neigh_node *neigh_node;
 	struct sk_buff *skb;
 	struct coding_path *coding_path;
 };
