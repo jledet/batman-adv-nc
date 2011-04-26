@@ -296,7 +296,7 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 	int numq = netdev->num_tx_queues;
 	for (i = 0; i < numq; i++) {
 		struct netdev_queue *netq = netdev_get_tx_queue(netdev, i);
-		int qlen = qdisc_qlen(netq->qdisc);
+		int qlen = netq->qdisc->q.qlen;
 		printk(KERN_INFO "%s tx queue %d uses %d of %lu packets and is %s\r\n",
 				netdev->name, i, qlen, netdev->tx_queue_len,
 				netif_queue_stopped(netdev) ? "STOPPED" : "RUNNING");
