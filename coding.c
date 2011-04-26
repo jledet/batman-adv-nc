@@ -3,6 +3,8 @@
 #include "originator.h"
 #include "coding.h"
 #include "hash.h"
+#include <linux/netdevice.h>
+#include <net/sch_generic.h>
 
 int coding_thread(void *data);
 
@@ -288,6 +290,17 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 	spinlock_t *lock;
 	int index, i;
 	uint8_t hash_key[ETH_ALEN];
+	
+	/* Loop through hard iface transmit queues */
+	struct net_device *netdev = bat_priv->primary_if->net_dev;
+	int numq = netdev->num_tx_queues;
+	for (i = 0; i < numq; i++) {
+		struct netdev_queue *netq = netdev_get_tx_queue(netdev, i);
+		int qlen = qdisc_qlen(netq->qdisc);
+		printk(KERN_INFO "%s tx queue %d uses %d of %lu packets and is %s\r\n",
+				netdev->name, i, qlen, netdev->tx_queue_len,
+				netif_queue_stopped(netdev) ? "STOPPED" : "RUNNING");
+	}
 
 	rcu_read_lock();
 	hlist_for_each_entry_rcu(out_coding_node, node,
