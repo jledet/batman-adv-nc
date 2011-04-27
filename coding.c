@@ -299,10 +299,7 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 		for (i = 0; i < numq; i++) {
 			netq = netdev_get_tx_queue(netdev, i);
 			qlen = netq->qdisc->q.qlen;
-			/*printk(KERN_DEBUG "%s tx queue %d uses %d of %lu packets and is %s - parent device is %p\r\n",
-					netdev->name, i, qlen, netdev->tx_queue_len,
-					netif_queue_stopped(netdev) ? "STOPPED" : "RUNNING",
-					netdev->dev.parent);*/
+			printk(KERN_DEBUG "%s queue%d [%d/%lu]\r\n", netdev->name, i, qlen, netdev->tx_queue_len);
 		}
 	}
 
