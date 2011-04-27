@@ -124,6 +124,30 @@ static void update_primary_addr(struct bat_priv *bat_priv)
 	       bat_priv->primary_if->net_dev->dev_addr, ETH_ALEN);
 }
 
+static void set_real_if(struct bat_priv *bat_priv,
+			struct hard_iface *hard_iface)
+{
+	struct net_device *netdev;
+	struct net *net;
+
+	if (hard_iface->net_dev->tx_queue_len == 0) {
+		printk(KERN_DEBUG "Hard interface is virtual. Searching for real device\n");
+		net = dev_net(hard_iface->net_dev);
+		rcu_read_lock();
+		for_each_netdev(net, netdev) {
+			if (netdev != hard_iface->net_dev &&
+			compare_eth(hard_iface->net_dev->dev_addr, netdev->dev_addr)) {
+				printk(KERN_DEBUG "Assuming %s is the real device\n", netdev->name);
+				hard_iface->real_net_dev = netdev;
+				break;
+			}
+		}
+		rcu_read_unlock();
+	} else {
+		hard_iface->real_net_dev = hard_iface->net_dev;
+	}
+}
+
 static void set_primary_if(struct bat_priv *bat_priv,
 			   struct hard_iface *hard_iface)
 {
@@ -145,7 +169,8 @@ static void set_primary_if(struct bat_priv *bat_priv,
 	batman_packet = (struct batman_packet *)(hard_iface->packet_buff);
 	batman_packet->flags = PRIMARIES_FIRST_HOP;
 	batman_packet->ttl = TTL;
-
+	
+	set_real_if(bat_priv, hard_iface);
 	update_primary_addr(bat_priv);
 	update_promisc(hard_iface->soft_iface);
 

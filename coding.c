@@ -302,21 +302,23 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 	struct coding_packet *coding_packet = NULL;
 	struct coding_path *coding_path;
 	spinlock_t *lock;
-	int index, i;
+	int index, i, numq, qlen;
 	uint8_t hash_key[ETH_ALEN];
+	struct netdev_queue *netq;
 	
 #if 0
 	/* Loop through hard iface transmit queues */
-	struct net_device *netdev = bat_priv->primary_if->net_dev;
-	struct net_device *master = netdev->master;
-	int numq = netdev->num_tx_queues;
-	for (i = 0; i < numq; i++) {
-		struct netdev_queue *netq = netdev_get_tx_queue(netdev, i);
-		int qlen = netq->qdisc->q.qlen;
-		printk(KERN_INFO "%s tx queue %d uses %d of %lu packets and is %s - master is %s\r\n",
-				netdev->name, i, qlen, netdev->tx_queue_len,
-				netif_queue_stopped(netdev) ? "STOPPED" : "RUNNING",
-				master ? master->name : "NULL");
+	struct net_device *netdev = bat_priv->primary_if->real_net_dev;
+	if (netdev) {
+		numq = netdev->num_tx_queues;
+		for (i = 0; i < numq; i++) {
+			netq = netdev_get_tx_queue(netdev, i);
+			qlen = netq->qdisc->q.qlen;
+			/*printk(KERN_DEBUG "%s tx queue %d uses %d of %lu packets and is %s - parent device is %p\r\n",
+					netdev->name, i, qlen, netdev->tx_queue_len,
+					netif_queue_stopped(netdev) ? "STOPPED" : "RUNNING",
+					netdev->dev.parent);*/
+		}
 	}
 #endif
 
