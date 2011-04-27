@@ -196,56 +196,69 @@ int coding_thread(void *data)
 	return 0;
 }
 
-void code_packets(struct sk_buff *skb, struct ethhdr *ethhdr,
+void code_packets(struct bat_priv *bat_priv,
+		struct sk_buff *skb,
+		struct ethhdr *ethhdr,
 		struct coding_packet *coding_packet,
 		struct neigh_node *neigh_node)
 {
 	const int unicast_size = sizeof(struct unicast_packet);
+	const int coded_size = sizeof(struct coded_packet);
 	const int header_add =
 		sizeof(struct coded_packet) - sizeof(struct unicast_packet);
-	unsigned int data_len;
+	unsigned int coding_len;
+	uint8_t coding_packet_first = 0;
 	struct sk_buff *skb_dest, *skb_src;
-	struct unicast_packet unicast_packet_tmp;
 	struct unicast_packet *unicast_packet1;
 	struct unicast_packet *unicast_packet2;
 	struct coded_packet *coded_packet;
 	uint8_t *first_source, *first_dest, *second_source, *second_dest;
 
+	/* If enabled, choose mac-dest based on lowest link quality. Otherwise
+	 * use skb-length */
+	if (atomic_read(&bat_priv->catwoman_tq)) {
+		if (neigh_node->orig_node->router->tq_avg >=
+				coding_packet->neigh_node->orig_node->router->tq_avg)
+			coding_packet_first = 1;
+	} else {
+		if (skb->len <= coding_packet->skb->len)
+			coding_packet_first = 1;
+	}
+
 	/* Instead of zero padding the smallest data buffer, we
 	 * code into the largest. */
-
-	printk(KERN_DEBUG "CW: tq1: %hhu, tq2: %hhu", neigh_node->tq_avg,
-			coding_packet->neigh_node->tq_avg);
-
-	if (skb->len >= coding_packet->skb->len) {
-		skb_dest = skb;
-		skb_src = coding_packet->skb;
-		first_dest = neigh_node->addr;
-		first_source = ethhdr->h_source;
-		second_dest = coding_packet->coding_path->next_hop;
-		second_source = coding_packet->coding_path->prev_hop;
-	} else {
+	if (skb->len <= coding_packet->skb->len) {
 		skb_dest = coding_packet->skb;
 		skb_src = skb;
+	} else {
+		skb_dest = skb;
+		skb_src = coding_packet->skb;
+	}
+
+	coding_len = skb_src->len - unicast_size;
+
+	/* Setup variables for use in header */
+	if (coding_packet_first) {
 		first_dest = coding_packet->coding_path->next_hop;
 		first_source = coding_packet->coding_path->prev_hop;
 		second_dest = neigh_node->addr;
 		second_source = ethhdr->h_source;
+		unicast_packet1 = (struct unicast_packet *)coding_packet->skb->data;
+		unicast_packet2 = (struct unicast_packet *)skb->data;
+	} else {
+		first_dest = neigh_node->addr;
+		first_source = ethhdr->h_source;
+		second_dest = coding_packet->coding_path->next_hop;
+		second_source = coding_packet->coding_path->prev_hop;
+		unicast_packet1 = (struct unicast_packet *)skb->data;
+		unicast_packet2 = (struct unicast_packet *)coding_packet->skb->data;
 	}
-
-	data_len = skb_src->len - unicast_size;
-	unicast_packet1 = (struct unicast_packet *)skb_dest->data;
-	unicast_packet2 = (struct unicast_packet *)skb_src->data;
 
 	printk(KERN_DEBUG "CW: Coding packets: %hu xor %hu\n",
 			unicast_packet1->decoding_id, unicast_packet2->decoding_id);
 
 	if(skb_cow(skb_dest, header_add) < 0)
 		return;
-
-	/* Save original header before writing new in place */
-	memcpy(&unicast_packet_tmp, unicast_packet1,
-			sizeof(struct unicast_packet));
 
 	/* Make room for our coded header */
 	skb_push(skb_dest, header_add);
@@ -267,10 +280,11 @@ void code_packets(struct sk_buff *skb, struct ethhdr *ethhdr,
 	memcpy(coded_packet->second_orig_dest, unicast_packet2->dest, ETH_ALEN);
 	coded_packet->second_id = unicast_packet2->decoding_id;
 	coded_packet->second_ttl = unicast_packet2->ttl;
-	coded_packet->second_len = htons(data_len);
+	coded_packet->coded_len = htons(coding_len);
 
-	memxor((char *)unicast_packet1 + unicast_size, (char *)unicast_packet2 + unicast_size,
-			data_len);
+	/* This is where the magic happens:
+	 *   Code skb_src into skb_dest */
+	memxor(skb_dest->data + coded_size, skb_src->data + unicast_size, coding_len);
 
 	dev_kfree_skb(skb_src);
 	coding_packet->skb = NULL;
@@ -291,6 +305,7 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 	int index, i;
 	uint8_t hash_key[ETH_ALEN];
 	
+#if 0
 	/* Loop through hard iface transmit queues */
 	struct net_device *netdev = bat_priv->primary_if->net_dev;
 	struct net_device *master = netdev->master;
@@ -303,6 +318,7 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 				netif_queue_stopped(netdev) ? "STOPPED" : "RUNNING",
 				master ? master->name : "NULL");
 	}
+#endif
 
 	rcu_read_lock();
 	hlist_for_each_entry_rcu(out_coding_node, node,
@@ -372,7 +388,7 @@ int send_coded_packet(struct sk_buff *skb,
 			find_coding_packet(bat_priv, coding_node, ethhdr);
 
 		if (coding_packet) {
-			code_packets(skb, ethhdr, coding_packet,
+			code_packets(bat_priv, skb, ethhdr, coding_packet,
 					neigh_node);
 			goto out;
 		}

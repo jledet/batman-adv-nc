@@ -49,6 +49,7 @@ struct unicast_packet *decode_packet(struct sk_buff *skb,
 	struct ethhdr *ethhdr, ethhdr_tmp;
 	uint8_t *orig_dest, ttl;
 	uint16_t id;
+	unsigned int coding_len;
 
 	memcpy(&coded_packet_tmp, skb->data, sizeof(struct coded_packet));
 	memcpy(&ethhdr_tmp, skb_mac_header(skb), sizeof(struct ethhdr));
@@ -69,21 +70,29 @@ struct unicast_packet *decode_packet(struct sk_buff *skb,
 	memcpy(ethhdr, &ethhdr_tmp, sizeof(struct ethhdr));
 
 	if (is_my_mac(coded_packet_tmp.second_dest)) {
+		printk(KERN_DEBUG "CW: I am second dest");
 		memcpy(ethhdr->h_dest, coded_packet_tmp.second_dest, ETH_ALEN);
-		pskb_trim_rcsum(skb, ntohs(coded_packet_tmp.second_len) + header_size);
 		skb->pkt_type = PACKET_HOST;
 		orig_dest = coded_packet_tmp.second_orig_dest;
 		ttl = coded_packet_tmp.second_ttl;
 		id = coded_packet_tmp.second_id;
 	} else {
+		printk(KERN_DEBUG "CW: I am first dest");
 		orig_dest = coded_packet_tmp.first_orig_dest;
 		ttl = coded_packet_tmp.first_ttl;
 		id = coded_packet_tmp.first_id;
 	}
 
+	coding_len = ntohs(coded_packet_tmp.coded_len);
+
+	if (decoding_packet->skb->len > coding_len + header_size) {
+		printk(KERN_DEBUG "CW: Decoding packet is longer than coding length, resizing...");
+		pskb_trim_rcsum(skb, coding_len + header_size);
+	}
+
 	memxor(skb->data + header_size,
 			decoding_packet->skb->data + header_size,
-			ntohs(coded_packet_tmp.second_len));
+			coding_len);
 
 	/* Setup decoded unicast packet */
 	unicast_packet = (struct unicast_packet *)skb->data;

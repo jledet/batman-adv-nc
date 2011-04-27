@@ -176,6 +176,7 @@ struct bat_priv {
 	atomic_t bonding;		/* boolean */
 	atomic_t fragmentation;		/* boolean */
 	atomic_t catwoman;		/* boolean */
+	atomic_t catwoman_tq;		/* boolean */
 	atomic_t catwoman_promisc;	/* boolean */
 	atomic_t catwoman_hold;		/* uint */
 	atomic_t catwoman_purge;	/* uint */
