@@ -570,6 +570,7 @@ struct net_device *softif_create(char *name)
 	atomic_set(&bat_priv->aggregated_ogms, 1);
 	atomic_set(&bat_priv->bonding, 0);
 	atomic_set(&bat_priv->catwoman, CATWOMAN_ENABLED);
+	atomic_set(&bat_priv->catwoman_tq, 1);
 	atomic_set(&bat_priv->catwoman_promisc, 0);
 	atomic_set(&bat_priv->catwoman_hold, CODING_HOLD);
 	atomic_set(&bat_priv->catwoman_purge, DECODING_TIMEOUT);
