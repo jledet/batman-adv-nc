@@ -254,8 +254,10 @@ void code_packets(struct bat_priv *bat_priv,
 		unicast_packet2 = (struct unicast_packet *)coding_packet->skb->data;
 	}
 
+	/*
 	printk(KERN_DEBUG "CW: Coding packets: %hu xor %hu\n",
 			unicast_packet1->decoding_id, unicast_packet2->decoding_id);
+	*/
 
 	if(skb_cow(skb_dest, header_add) < 0)
 		return;
