@@ -304,11 +304,12 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 	struct coding_packet *coding_packet = NULL;
 	struct coding_path *coding_path;
 	spinlock_t *lock;
-	int index, i, numq, qlen;
+	int index, i;
 	uint8_t hash_key[ETH_ALEN];
-	struct netdev_queue *netq;
-	
 #if 0
+	struct netdev_queue *netq;
+	int numq, qlen;
+	
 	/* Loop through hard iface transmit queues */
 	struct net_device *netdev = bat_priv->primary_if->real_net_dev;
 	if (netdev) {

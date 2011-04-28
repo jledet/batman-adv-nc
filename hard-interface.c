@@ -135,7 +135,7 @@ static void set_real_if(struct bat_priv *bat_priv,
 				hard_iface->net_dev->name);
 		net = dev_net(hard_iface->net_dev);
 		rcu_read_lock();
-		for_each_netdev_rcu(net, netdev) {
+		for_each_netdev(net, netdev) {
 			if (netdev != hard_iface->net_dev &&
 				netdev->tx_queue_len &&
 				compare_eth(hard_iface->net_dev->dev_addr, 
