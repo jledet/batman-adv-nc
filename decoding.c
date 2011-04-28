@@ -70,14 +70,12 @@ struct unicast_packet *decode_packet(struct sk_buff *skb,
 	memcpy(ethhdr, &ethhdr_tmp, sizeof(struct ethhdr));
 
 	if (is_my_mac(coded_packet_tmp.second_dest)) {
-		printk(KERN_DEBUG "CW: I am second dest");
 		memcpy(ethhdr->h_dest, coded_packet_tmp.second_dest, ETH_ALEN);
 		skb->pkt_type = PACKET_HOST;
 		orig_dest = coded_packet_tmp.second_orig_dest;
 		ttl = coded_packet_tmp.second_ttl;
 		id = coded_packet_tmp.second_id;
 	} else {
-		printk(KERN_DEBUG "CW: I am first dest");
 		orig_dest = coded_packet_tmp.first_orig_dest;
 		ttl = coded_packet_tmp.first_ttl;
 		id = coded_packet_tmp.first_id;
@@ -85,11 +83,11 @@ struct unicast_packet *decode_packet(struct sk_buff *skb,
 
 	coding_len = ntohs(coded_packet_tmp.coded_len);
 
-	if (decoding_packet->skb->len > coding_len + header_size) {
-		printk(KERN_DEBUG "CW: Decoding packet is longer than coding length, resizing...");
+	if (decoding_packet->skb->len > coding_len + header_size)
 		pskb_trim_rcsum(skb, coding_len + header_size);
-	}
 
+	/* Here the magic is reverted:
+	 *   extract the missing packet from the received coded packet */
 	memxor(skb->data + header_size,
 			decoding_packet->skb->data + header_size,
 			coding_len);
@@ -102,9 +100,10 @@ struct unicast_packet *decode_packet(struct sk_buff *skb,
 	unicast_packet->ttl = ttl;
 	unicast_packet->decoding_id = id;
 
+	/*
 	printk(KERN_DEBUG "CW: Decoded: %hu xor %hu\n",
 			unicast_packet->decoding_id, decoding_packet->id);
-
+	*/
 
 	return unicast_packet;
 }
