@@ -131,13 +131,17 @@ static void set_real_if(struct bat_priv *bat_priv,
 	struct net *net;
 
 	if (hard_iface->net_dev->tx_queue_len == 0) {
-		printk(KERN_DEBUG "Hard interface is virtual. Searching for real device\n");
+		printk(KERN_DEBUG "Hard interface %s is virtual\n",
+				hard_iface->net_dev->name);
 		net = dev_net(hard_iface->net_dev);
 		rcu_read_lock();
-		for_each_netdev(net, netdev) {
+		for_each_netdev_rcu(net, netdev) {
 			if (netdev != hard_iface->net_dev &&
-			compare_eth(hard_iface->net_dev->dev_addr, netdev->dev_addr)) {
-				printk(KERN_DEBUG "Assuming %s is the real device\n", netdev->name);
+				netdev->tx_queue_len &&
+				compare_eth(hard_iface->net_dev->dev_addr, 
+					netdev->dev_addr)) {
+				printk(KERN_DEBUG "Assuming %s is the real device\n",
+						netdev->name);
 				hard_iface->real_net_dev = netdev;
 				break;
 			}
