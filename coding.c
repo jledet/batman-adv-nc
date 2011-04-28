@@ -306,26 +306,26 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 	uint8_t hash_key[ETH_ALEN];
 	struct netdev_queue *netq;
 	
-#if 0
 	/* Loop through hard iface transmit queues */
 	struct net_device *netdev = bat_priv->primary_if->real_net_dev;
 	if (netdev) {
+		netif_tx_lock(netdev);
 		numq = netdev->num_tx_queues;
 		for (i = 0; i < numq; i++) {
 			netq = netdev_get_tx_queue(netdev, i);
 			qlen = netq->qdisc->q.qlen;
 			printk(KERN_DEBUG "%s queue%d [%d/%lu]\r\n", netdev->name, i, qlen, netdev->tx_queue_len);
 		}
+		netif_tx_unlock(netdev);
 	}
-#endif
 
 	rcu_read_lock();
 	hlist_for_each_entry_rcu(out_coding_node, node,
 			&orig_node->out_coding_list, list) {
 		/* Create almost unique path key */
 		for (i = 0; i < ETH_ALEN; ++i)
-			hash_key[i] =
-				in_coding_node->addr[i] ^ out_coding_node->addr[ETH_ALEN-1-i];
+			hash_key[i] = in_coding_node->addr[i] ^ 
+				out_coding_node->addr[ETH_ALEN-1-i];
 		index = choose_coding(hash_key, hash->size);
 		lock = &hash->list_locks[index];
 
