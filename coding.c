@@ -322,6 +322,7 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 		}
 		netif_tx_unlock(netdev);
 	}
+#endif
 
 	rcu_read_lock();
 	hlist_for_each_entry_rcu(out_coding_node, node,
