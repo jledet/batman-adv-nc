@@ -87,13 +87,6 @@ static inline struct coding_path *coding_hash_find(struct hashtable_t *hash,
 	return coding_path_tmp;
 }
 
-static inline void pretty_mac(char *asc, char *addr)
-{
-	snprintf(asc, 18, "%02hhx:%02hhx:%02hhx:%02hhx:%02hhx:%02hhx",
-			addr[0], addr[1], addr[2],
-			addr[3], addr[4], addr[5]);
-}
-
 static inline void memxor(char *data1, const char *data2, int len)
 {
 	int i;
