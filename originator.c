@@ -74,18 +74,14 @@ void coding_node_free_rcu(struct rcu_head *rcu)
 {
 	struct coding_node *coding_node;
 
-	printk(KERN_DEBUG "WOMBAT: freeing coding_node\n");
 	coding_node = container_of(rcu, struct coding_node, rcu);
 	kfree(coding_node);
-	printk(KERN_DEBUG "WOMBAT: coding_node freed\n");
 }
 
 void coding_node_free_ref(struct coding_node *coding_node)
 {
-	if (atomic_dec_and_test(&coding_node->refcount)) {
-		printk(KERN_DEBUG "WOMBAT: call_rcu\n");
+	if (atomic_dec_and_test(&coding_node->refcount))
 		call_rcu(&coding_node->rcu, coding_node_free_rcu);
-	}
 }
 
 struct neigh_node *create_neighbor(struct orig_node *orig_node,
