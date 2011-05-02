@@ -16,6 +16,7 @@ static void start_decoding_timer(struct bat_priv *bat_priv)
 	queue_delayed_work(bat_event_workqueue, &bat_priv->decoding_work, 1 * HZ);
 }
 
+/* Init decoding packet hash table, start purge delayed work */ 
 int decoding_init(struct bat_priv *bat_priv)
 {
 	if (bat_priv->decoding_hash)
@@ -33,11 +34,13 @@ int decoding_init(struct bat_priv *bat_priv)
 	return 0;
 }
 
+/* Get next available decoding id */
 uint16_t get_decoding_id(struct bat_priv *bat_priv)
 {
 	return (uint16_t)atomic_inc_return(&bat_priv->last_decoding_id);
 }
 
+/* Decode coded packet in skb with decoding_packet */
 struct unicast_packet *decode_packet(struct sk_buff *skb,
 		struct coding_packet *decoding_packet)
 {
@@ -69,9 +72,14 @@ struct unicast_packet *decode_packet(struct sk_buff *skb,
 	ethhdr = (struct ethhdr *)skb_mac_header(skb);
 	memcpy(ethhdr, &ethhdr_tmp, sizeof(struct ethhdr));
 
+	/* Read unicast attributes */
 	if (is_my_mac(coded_packet_tmp.second_dest)) {
+		/* If we are the second destination the packet was overheard,
+		 * so the Ethernet address must be copied to h_dest and 
+		 * pkt_type changed from PACKET_OTHERHOST to PACKET_HOST */
 		memcpy(ethhdr->h_dest, coded_packet_tmp.second_dest, ETH_ALEN);
 		skb->pkt_type = PACKET_HOST;
+
 		orig_dest = coded_packet_tmp.second_orig_dest;
 		ttl = coded_packet_tmp.second_ttl;
 		id = coded_packet_tmp.second_id;
@@ -83,16 +91,17 @@ struct unicast_packet *decode_packet(struct sk_buff *skb,
 
 	coding_len = ntohs(coded_packet_tmp.coded_len);
 
-	if (decoding_packet->skb->len > coding_len + header_size)
-		pskb_trim_rcsum(skb, coding_len + header_size);
-
-	/* Here the magic is reverted:
+	/* Here the magic is reversed:
 	 *   extract the missing packet from the received coded packet */
 	memxor(skb->data + header_size,
 			decoding_packet->skb->data + header_size,
 			coding_len);
 
-	/* Setup decoded unicast packet */
+	/* Resize decoded skb if decoded with larger packet */
+	if (decoding_packet->skb->len > coding_len + header_size)
+		pskb_trim_rcsum(skb, coding_len + header_size);
+
+	/* Create decoded unicast packet */
 	unicast_packet = (struct unicast_packet *)skb->data;
 	unicast_packet->packet_type = BAT_UNICAST;
 	unicast_packet->version = COMPAT_VERSION;
@@ -108,14 +117,13 @@ struct unicast_packet *decode_packet(struct sk_buff *skb,
 	return unicast_packet;
 }
 
+/* Find necessary packet for decoding skb */
 struct coding_packet *find_decoding_packet(struct bat_priv *bat_priv,
-		struct sk_buff *skb)
+					   struct sk_buff *skb)
 {
 	struct hashtable_t *hash = bat_priv->decoding_hash;
 	struct hlist_node *hnode;
-	spinlock_t *list_lock;
-	struct coded_packet *coded_packet =
-		(struct coded_packet *)skb->data;
+	struct coded_packet *coded_packet = (struct coded_packet *)skb->data;
 	struct coding_packet *decoding_packet, *decoding_packet_tmp;
 	struct coding_path *coding_path;
 	uint8_t *dest, *source;
@@ -127,12 +135,11 @@ struct coding_packet *find_decoding_packet(struct bat_priv *bat_priv,
 	if (!hash)
 		return NULL;
 
+	dest = ethhdr->h_source;
 	if (!is_my_mac(coded_packet->second_dest)) {
-		dest = ethhdr->h_source;
 		source = coded_packet->second_source;
 		id = coded_packet->second_id;
 	} else {
-		dest = ethhdr->h_source;
 		source = coded_packet->first_source;
 		id = coded_packet->first_id;
 	}
@@ -142,11 +149,10 @@ struct coding_packet *find_decoding_packet(struct bat_priv *bat_priv,
 		hash_key[i] = source[i] ^ dest[ETH_ALEN-1-i];
 
 	index = choose_coding(hash_key, hash->size);
-	list_lock = &hash->list_locks[index];
 
-	/* Search for matching decoding_packet */
-	spin_lock_bh(list_lock);
-	hlist_for_each_entry(coding_path, hnode, &hash->table[index],
+	/* Search for matching coding path */
+	rcu_read_lock();
+	hlist_for_each_entry_rcu(coding_path, hnode, &hash->table[index],
 			hash_entry) {
 		if (!compare_eth(dest, coding_path->next_hop))
 			continue;
@@ -154,34 +160,32 @@ struct coding_packet *find_decoding_packet(struct bat_priv *bat_priv,
 		if (!compare_eth(source, coding_path->prev_hop))
 			continue;
 		
-		spin_lock_bh(&coding_path->packet_list_lock);
-		list_for_each_entry_safe(decoding_packet, decoding_packet_tmp, 
+		/* Find matching decoding_packet */
+		list_for_each_entry_safe_rcu(decoding_packet, decoding_packet_tmp, 
 				&coding_path->packet_list, list) {
-			if (id != decoding_packet->id)
-				continue;
-			goto out;
+			if (id == decoding_packet->id) {
+				atomic_dec(&bat_priv->decoding_hash_count);
+				spin_lock_bh(&coding_path->packet_list_lock);
+				list_del_rcu(&decoding_packet->list);
+				spin_unlock_bh(&coding_path->packet_list_lock);
+				rcu_read_unlock();
+				return decoding_packet;
+			}
 		}
-		spin_unlock_bh(&coding_path->packet_list_lock);
 	}
-	spin_unlock_bh(list_lock);
+	rcu_read_unlock();
 
 	printk(KERN_DEBUG "CW: No decoding packet found\n");
 	return NULL;
-
-out:
-	atomic_dec(&bat_priv->decoding_hash_count);
-	list_del_rcu(&decoding_packet->list);
-	spin_unlock_bh(&coding_path->packet_list_lock);
-	spin_unlock_bh(list_lock);
-	return decoding_packet;
 }
 
+/* Attempt to decode coded packet and return decoded unicast packet */
 struct unicast_packet *receive_coded_packet(struct bat_priv *bat_priv,
 		struct sk_buff *skb, int hdr_size)
 {
+	struct unicast_packet *unicast_packet;
 	struct coding_packet *decoding_packet =
 		find_decoding_packet(bat_priv, skb);
-	struct unicast_packet *unicast_packet;
 
 	if (!decoding_packet)
 		return NULL;
@@ -195,6 +199,7 @@ struct unicast_packet *receive_coded_packet(struct bat_priv *bat_priv,
 	return unicast_packet;
 }
 
+/* Add decoding skb to pool */
 void add_decoding_skb(struct hard_iface *hard_iface, struct sk_buff *skb)
 {
 	struct bat_priv *bat_priv = netdev_priv(hard_iface->soft_iface);
@@ -240,6 +245,7 @@ free_skb:
 	dev_kfree_skb(skb);
 }
 
+/* Return true if decoding packet has timed out */
 static inline int decoding_packet_timeout(struct bat_priv *bat_priv,
 		struct coding_packet *decoding_packet)
 {
@@ -248,6 +254,7 @@ static inline int decoding_packet_timeout(struct bat_priv *bat_priv,
 			(atomic_read(&bat_priv->catwoman_purge) * HZ) / MSEC_PER_SEC);
 }
 
+/* Purge decoding packets that have timed out */
 static void _purge_decoding(struct bat_priv *bat_priv)
 {
 	struct hashtable_t *hash = bat_priv->decoding_hash;
@@ -282,6 +289,7 @@ static void _purge_decoding(struct bat_priv *bat_priv)
 	}
 }
 
+/* Run purge function and reschedule purge loop */
 static void purge_decoding(struct work_struct *work)
 {
 	struct delayed_work *delayed_work =
@@ -293,6 +301,7 @@ static void purge_decoding(struct work_struct *work)
 	start_decoding_timer(bat_priv);
 }
 
+/* Cleanup all decoding packets */
 void decoding_free(struct bat_priv *bat_priv)
 {
 	struct hashtable_t *decoding_hash = bat_priv->decoding_hash;
@@ -334,6 +343,7 @@ void decoding_free(struct bat_priv *bat_priv)
 	hash_destroy(decoding_hash);
 }
 
+/* Update interface promiscuous mode from catwoman sysfs entry */
 void update_promisc(struct net_device *soft_iface)
 {
 	int catwoman, promisc;

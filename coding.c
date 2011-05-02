@@ -8,6 +8,7 @@
 
 int coding_thread(void *data);
 
+/* Init coding hash table and kthread */
 int coding_init(struct bat_priv *bat_priv)
 {
 	atomic_set(&bat_priv->coding_hash_count, 0);
@@ -17,14 +18,15 @@ int coding_init(struct bat_priv *bat_priv)
 		return -1;
 
 	bat_priv->coding_thread = kthread_create(coding_thread,
-			(void *)bat_priv, "BATMAN Coding");
+			(void *)bat_priv, "catwomand");
 	wake_up_process(bat_priv->coding_thread);
 
 	return 0;
 }
 
+/* Return true if neigh_orig_node is neighbor to orig_node */
 int orig_has_neighbor(struct orig_node *orig_node,
-		struct orig_node *neigh_orig_node)
+		      struct orig_node *neigh_orig_node)
 {
 	struct coding_node *tmp_coding_node;
 	struct hlist_node *node;
@@ -45,15 +47,19 @@ int orig_has_neighbor(struct orig_node *orig_node,
 }
 
 int add_coding_node(struct orig_node *orig_node,
-		struct orig_node *neigh_orig_node)
+		    struct orig_node *neigh_orig_node)
 {
-	struct coding_node *in_coding_node =
-		kzalloc(sizeof(struct coding_node), GFP_ATOMIC);
-	struct coding_node *out_coding_node =
-		kzalloc(sizeof(struct coding_node), GFP_ATOMIC);
+	struct coding_node *in_coding_node, *out_coding_node;
 
+	in_coding_node = kzalloc(sizeof(struct coding_node), GFP_ATOMIC);
 	if (!in_coding_node)
 		return -1;
+	
+	out_coding_node = kzalloc(sizeof(struct coding_node), GFP_ATOMIC);
+	if (!out_coding_node) {
+		kfree(in_coding_node);
+		return -1;
+	}
 
 	INIT_HLIST_NODE(&in_coding_node->list);
 	memcpy(in_coding_node->addr, orig_node->orig, ETH_ALEN);
@@ -77,9 +83,9 @@ int add_coding_node(struct orig_node *orig_node,
 }
 
 void coding_orig_neighbor(struct bat_priv *bat_priv,
-		struct orig_node *orig_node,
-		struct orig_node *neigh_orig_node,
-		struct batman_packet *batman_packet)
+			  struct orig_node *orig_node,
+			  struct orig_node *neigh_orig_node,
+			  struct batman_packet *batman_packet)
 {
 	if (!orig_has_neighbor(orig_node, neigh_orig_node)) {
 		printk(KERN_DEBUG "CW: Adding coding neighbor:\n");
@@ -92,6 +98,7 @@ void coding_orig_neighbor(struct bat_priv *bat_priv,
 	}
 }
 
+/* Coding packet RCU callback */
 void coding_packet_free_rcu(struct rcu_head *rcu)
 {
 	struct coding_packet *coding_packet;
@@ -103,12 +110,14 @@ void coding_packet_free_rcu(struct rcu_head *rcu)
 	kfree(coding_packet);
 }
 
+/* Decrement coding packet refcount and call RCU callback if zero */
 void coding_packet_free_ref(struct coding_packet *coding_packet)
 {
 	if (atomic_dec_and_test(&coding_packet->refcount))
 		call_rcu(&coding_packet->rcu, coding_packet_free_rcu);
 }
 
+/* Coding path RCU callback */
 void coding_path_free_rcu(struct rcu_head *rcu)
 {
 	struct coding_path *coding_path;
@@ -117,25 +126,30 @@ void coding_path_free_rcu(struct rcu_head *rcu)
 	kfree(coding_path);
 }
 
+/* Decrement coding path refcount and call RCU callback if zero */
 void coding_path_free_ref(struct coding_path *coding_path)
 {
 	if (atomic_dec_and_test(&coding_path->refcount))
 		call_rcu(&coding_path->rcu, coding_path_free_rcu);
 }
 
+/* Return true if coding packet has timed out */
 static inline int coding_packet_timeout(struct bat_priv *bat_priv,
-		struct coding_packet *coding_packet)
+					struct coding_packet *coding_packet)
 {
-	struct timespec now = current_kernel_time();
+	unsigned int hold = atomic_read(&bat_priv->catwoman_hold);
+	unsigned int sec = hold / MSEC_PER_SEC;
 	struct timespec timeout = {
-		0, 
-		atomic_read(&bat_priv->catwoman_hold) * NSEC_PER_MSEC
+		sec, 
+		(hold - sec * MSEC_PER_SEC) * NSEC_PER_MSEC,
 	};
+	struct timespec now = current_kernel_time();
 	timeout = timespec_sub(now, timeout);
 
 	return timespec_compare(&coding_packet->timespec, &timeout) < 0 ? 1 : 0;
 }
 
+/* Send coded packet */
 void coding_send_packet(struct coding_packet *coding_packet)
 {
 	send_skb_packet(coding_packet->skb, coding_packet->neigh_node->if_incoming,
@@ -144,6 +158,7 @@ void coding_send_packet(struct coding_packet *coding_packet)
 	coding_packet_free_ref(coding_packet);
 }
 
+/* Traverse coding packet pool and send timed out packets */
 void work_coding_packets(struct bat_priv *bat_priv)
 {
 	struct hashtable_t *hash = bat_priv->coding_hash;
@@ -184,6 +199,7 @@ void work_coding_packets(struct bat_priv *bat_priv)
 	}
 }
 
+/* Coding packet worker thread */
 int coding_thread(void *data)
 {
 	struct bat_priv *bat_priv = (struct bat_priv *)data;
@@ -196,11 +212,12 @@ int coding_thread(void *data)
 	return 0;
 }
 
+/* Code packets and create coding packet */
 void code_packets(struct bat_priv *bat_priv,
-		struct sk_buff *skb,
-		struct ethhdr *ethhdr,
-		struct coding_packet *coding_packet,
-		struct neigh_node *neigh_node)
+		  struct sk_buff *skb,
+		  struct ethhdr *ethhdr,
+		  struct coding_packet *coding_packet,
+		  struct neigh_node *neigh_node)
 {
 	const int unicast_size = sizeof(struct unicast_packet);
 	const int coded_size = sizeof(struct coded_packet);
@@ -294,8 +311,10 @@ void code_packets(struct bat_priv *bat_priv,
 	send_skb_packet(skb_dest, neigh_node->if_incoming, first_dest);
 }
 
+/* Find suitable packet to code with */
 struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
-		struct coding_node *in_coding_node, struct ethhdr *ethhdr)
+					 struct coding_node *in_coding_node,
+					 struct ethhdr *ethhdr)
 {
 	struct hashtable_t *hash = bat_priv->coding_hash;
 	struct hlist_node *node, *p_node, *p_node_tmp;
@@ -318,7 +337,9 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 		for (i = 0; i < numq; i++) {
 			netq = netdev_get_tx_queue(netdev, i);
 			qlen = netq->qdisc->q.qlen;
-			printk(KERN_DEBUG "%s queue%d [%d/%lu]\r\n", netdev->name, i, qlen, netdev->tx_queue_len);
+			printk(KERN_DEBUG "%s queue%d [%d/%lu]\r\n",
+					netdev->name, i, 
+					qlen, netdev->tx_queue_len);
 		}
 		netif_tx_unlock(netdev);
 	}
@@ -371,8 +392,10 @@ out:
 	return coding_packet;
 }
 
+/* Send coded packet */
 int send_coded_packet(struct sk_buff *skb,
-		struct neigh_node *neigh_node, struct ethhdr *ethhdr)
+		      struct neigh_node *neigh_node,
+		      struct ethhdr *ethhdr)
 {
 	struct bat_priv *bat_priv =
 		netdev_priv(neigh_node->if_incoming->soft_iface);
@@ -406,8 +429,9 @@ out:
 	return 1;
 }
 
+/* Get existing coding path or allocate a new one */
 struct coding_path *get_coding_path(struct hashtable_t *hash, uint8_t *src,
-		uint8_t *dst)
+				    uint8_t *dst)
 {
 	int hash_added, i;
 	uint8_t hash_key[ETH_ALEN];
@@ -432,23 +456,22 @@ struct coding_path *get_coding_path(struct hashtable_t *hash, uint8_t *src,
 	memcpy(coding_path->next_hop, dst, ETH_ALEN);
 	memcpy(coding_path->prev_hop, src, ETH_ALEN);
 
-
 	hash_added = hash_add(hash, compare_coding,
 			      choose_coding, hash_key,
 			      &coding_path->hash_entry);
 
-	if (hash_added < 0)
-		goto free_coding_path;
+	if (hash_added < 0) {
+		kfree(coding_path);
+		return NULL;
+	}
 
 	return coding_path;
-
-free_coding_path:
-	kfree(coding_path);
-	return NULL;
 }
 
-int add_coding_skb(struct sk_buff *skb, struct neigh_node *neigh_node,
-	struct ethhdr *ethhdr)
+/* Add skb to coding packet pool */
+int add_coding_skb(struct sk_buff *skb,
+		   struct neigh_node *neigh_node,
+		   struct ethhdr *ethhdr)
 {
 	struct bat_priv *bat_priv
 		= netdev_priv(neigh_node->if_incoming->soft_iface);
@@ -498,6 +521,7 @@ free_coding_packet:
 	return NET_RX_DROP;
 }
 
+/* Clean up coding packet pool */
 void coding_free(struct bat_priv *bat_priv)
 {
 	struct hashtable_t *coding_hash = bat_priv->coding_hash;
