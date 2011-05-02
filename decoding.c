@@ -124,7 +124,7 @@ struct coding_packet *find_decoding_packet(struct bat_priv *bat_priv,
 	struct hashtable_t *hash = bat_priv->decoding_hash;
 	struct hlist_node *hnode;
 	struct coded_packet *coded_packet = (struct coded_packet *)skb->data;
-	struct coding_packet *decoding_packet, *decoding_packet_tmp;
+	struct coding_packet *decoding_packet;
 	struct coding_path *coding_path;
 	uint8_t *dest, *source;
 	uint16_t id;
@@ -161,8 +161,8 @@ struct coding_packet *find_decoding_packet(struct bat_priv *bat_priv,
 			continue;
 		
 		/* Find matching decoding_packet */
-		list_for_each_entry_safe_rcu(decoding_packet, decoding_packet_tmp, 
-				&coding_path->packet_list, list) {
+		list_for_each_entry_rcu(decoding_packet,
+					&coding_path->packet_list, list) {
 			if (id == decoding_packet->id) {
 				atomic_dec(&bat_priv->decoding_hash_count);
 				spin_lock_bh(&coding_path->packet_list_lock);
