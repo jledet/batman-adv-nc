@@ -585,6 +585,9 @@ struct net_device *softif_create(char *name)
 	atomic_set(&bat_priv->bcast_queue_left, BCAST_QUEUE_LEN);
 	atomic_set(&bat_priv->batman_queue_left, BATMAN_QUEUE_LEN);
 
+	/* Reset catwoman statistics */
+	atomic_set(&bat_priv->catstat.coded, 0);
+
 	atomic_set(&bat_priv->mesh_state, MESH_INACTIVE);
 	atomic_set(&bat_priv->bcast_seqno, 1);
 	atomic_set(&bat_priv->hna_local_changed, 0);

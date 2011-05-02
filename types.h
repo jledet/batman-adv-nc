@@ -173,6 +173,10 @@ struct bat_skb_cb {
 	uint8_t decoded;
 };
 
+struct catwoman_stats {
+	atomic_t coded;
+};
+
 struct bat_priv {
 	atomic_t mesh_state;
 	struct net_device_stats stats;
@@ -231,6 +235,7 @@ struct bat_priv {
 	struct delayed_work decoding_work;
 	struct task_struct *coding_thread;
 	atomic_t last_decoding_id;
+	struct catwoman_stats catstat;
 };
 
 struct socket_client {

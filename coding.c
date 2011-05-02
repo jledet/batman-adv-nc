@@ -560,3 +560,47 @@ void coding_free(struct bat_priv *bat_priv)
 
 	hash_destroy(coding_hash);
 }
+
+int show_coding_neighbors(struct seq_file *seq, void *offset)
+{
+	struct net_device *net_dev = (struct net_device *)seq->private;
+	struct bat_priv *bat_priv = netdev_priv(net_dev);
+	struct hashtable_t *hash = bat_priv->orig_hash;
+	struct hlist_node *node, *node_neigh;
+	struct hlist_head *head;
+	struct orig_node *orig_node;
+	struct coding_node *coding_node;
+	int i;
+
+	for (i = 0; i < hash->size; i++) {
+		head = &hash->table[i];
+
+		rcu_read_lock();
+		hlist_for_each_entry_rcu(orig_node, node, head, hash_entry) {
+			seq_printf(seq, "Node:      %pM\n", orig_node->orig);
+			seq_printf(seq, " Ingoing:  ");
+			hlist_for_each_entry_rcu(coding_node, node_neigh, &orig_node->in_coding_list, list) {
+				seq_printf(seq, "%pM ", coding_node->addr);
+			}
+			seq_printf(seq, "\n");
+			seq_printf(seq, " Outgoing: ");
+			hlist_for_each_entry_rcu(coding_node, node_neigh, &orig_node->out_coding_list, list) {
+				seq_printf(seq, "%pM", coding_node->addr);
+			}
+			seq_printf(seq, "\n");
+
+		}
+		rcu_read_unlock();
+	}
+
+	return 0;
+}
+
+int coding_stats(struct seq_file *seq, void *offset)
+{
+	struct net_device *net_dev = (struct net_device *)seq->private;
+	struct bat_priv *bat_priv = netdev_priv(net_dev);
+	seq_printf(seq, "Coded: %d\n", atomic_read(&bat_priv->catstat.coded));
+	
+	return 0;
+}

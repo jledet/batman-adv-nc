@@ -18,6 +18,8 @@ void coding_packet_free_ref(struct coding_packet *coding_packet);
 void coding_path_free_ref(struct coding_path *coding_path);
 struct coding_path *get_coding_path(struct hashtable_t *hash, uint8_t *src,
 		uint8_t *dst);
+int show_coding_neighbors(struct seq_file *seq, void *offset);
+int coding_stats(struct seq_file *seq, void *offset);
 
 
 static inline int choose_coding(void *data, int32_t size)
