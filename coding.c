@@ -561,6 +561,7 @@ void coding_free(struct bat_priv *bat_priv)
 	hash_destroy(coding_hash);
 }
 
+/* debugfs function to show coding neighbors */
 int show_coding_neighbors(struct seq_file *seq, void *offset)
 {
 	struct net_device *net_dev = (struct net_device *)seq->private;
@@ -596,11 +597,66 @@ int show_coding_neighbors(struct seq_file *seq, void *offset)
 	return 0;
 }
 
+void stats_reset(struct bat_priv *bat_priv)
+{
+	seqlock_init(&bat_priv->catstat.lock);
+	atomic_set(&bat_priv->catstat.transmitted, 0);
+	atomic_set(&bat_priv->catstat.received, 0);
+	atomic_set(&bat_priv->catstat.forwarded, 0);
+	atomic_set(&bat_priv->catstat.coded, 0);
+	atomic_set(&bat_priv->catstat.dropped, 0);
+	atomic_set(&bat_priv->catstat.decoded, 0);
+	atomic_set(&bat_priv->catstat.failed, 0);
+}
+
+void stats_update(struct bat_priv *bat_priv, uint32_t flags)
+{
+	if (flags) {
+		write_seqlock(&bat_priv->catstat.lock);
+		if (flags & STAT_XMIT)
+			atomic_inc(&bat_priv->catstat.transmitted);
+		if (flags & STAT_RECV)
+			atomic_inc(&bat_priv->catstat.received);
+		if (flags & STAT_FORWARD)
+			atomic_inc(&bat_priv->catstat.forwarded);
+		if (flags & STAT_CODE)
+			atomic_inc(&bat_priv->catstat.coded);
+		if (flags & STAT_DECODE)
+			atomic_inc(&bat_priv->catstat.decoded);
+		if (flags & STAT_FAIL)
+			atomic_inc(&bat_priv->catstat.failed);
+		write_sequnlock(&bat_priv->catstat.lock);
+	}
+}
+
+/* debugfs function to list network coding statistics */
 int coding_stats(struct seq_file *seq, void *offset)
 {
 	struct net_device *net_dev = (struct net_device *)seq->private;
 	struct bat_priv *bat_priv = netdev_priv(net_dev);
-	seq_printf(seq, "Coded: %d\n", atomic_read(&bat_priv->catstat.coded));
+	struct catwoman_stats *catstat = &bat_priv->catstat;
+	seqlock_t *lock = &catstat->lock;
+	int transmitted, received, forwarded, coded, dropped, decoded, failed;
+	unsigned long sval;
+
+	do {
+		sval = read_seqbegin(lock);
+		transmitted = atomic_read(&catstat->transmitted);
+		received    = atomic_read(&catstat->received);
+		forwarded   = atomic_read(&catstat->forwarded);
+		coded       = atomic_read(&catstat->coded);
+		dropped     = atomic_read(&catstat->dropped);
+		decoded     = atomic_read(&catstat->decoded);
+		failed      = atomic_read(&catstat->failed);
+	} while (read_seqretry(lock, sval));
+
+	seq_printf(seq, "Transmitted:  %d\n", transmitted);
+	seq_printf(seq, "Received:     %d\n", received);
+	seq_printf(seq, "Forwarded:    %d\n", forwarded);
+	seq_printf(seq, "Coded:        %d\n", coded);
+	seq_printf(seq, "Dropped:      %d\n", dropped);
+	seq_printf(seq, "Decoded:      %d\n", decoded);
+	seq_printf(seq, "Failed:       %d\n", failed);
 	
 	return 0;
 }

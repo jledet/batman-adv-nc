@@ -292,8 +292,8 @@ static BAT_DEBUGINFO(softif_neigh, S_IRUGO, softif_neigh_open);
 static BAT_DEBUGINFO(transtable_global, S_IRUGO, transtable_global_open);
 static BAT_DEBUGINFO(transtable_local, S_IRUGO, transtable_local_open);
 static BAT_DEBUGINFO(vis_data, S_IRUGO, vis_data_open);
-static BAT_DEBUGINFO(catwoman, S_IRUGO,  coding_neighbors_open);
-static BAT_DEBUGINFO(catwoman_stats, S_IRUGO, coding_stats_open);
+static BAT_DEBUGINFO(coding_neighbors, S_IRUGO,  coding_neighbors_open);
+static BAT_DEBUGINFO(coding_stats, S_IRUGO, coding_stats_open);
 
 static struct bat_debuginfo *mesh_debuginfos[] = {
 	&bat_debuginfo_originators,
@@ -302,8 +302,8 @@ static struct bat_debuginfo *mesh_debuginfos[] = {
 	&bat_debuginfo_transtable_global,
 	&bat_debuginfo_transtable_local,
 	&bat_debuginfo_vis_data,
-	&bat_debuginfo_catwoman,
-	&bat_debuginfo_catwoman_stats,
+	&bat_debuginfo_coding_neighbors,
+	&bat_debuginfo_coding_stats,
 	NULL,
 };
 

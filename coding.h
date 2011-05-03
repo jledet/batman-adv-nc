@@ -20,6 +20,15 @@ struct coding_path *get_coding_path(struct hashtable_t *hash, uint8_t *src,
 		uint8_t *dst);
 int show_coding_neighbors(struct seq_file *seq, void *offset);
 int coding_stats(struct seq_file *seq, void *offset);
+void stats_reset(struct bat_priv *bat_priv);
+void stats_update(struct bat_priv *bat_priv, uint32_t flags);
+
+#define STAT_XMIT	1
+#define STAT_RECV	(STAT_XMIT	<< 1)
+#define STAT_FORWARD	(STAT_RECV	<< 1)
+#define STAT_CODE	(STAT_FORWARD	<< 1)
+#define STAT_DECODE	(STAT_CODE	<< 1)
+#define STAT_FAIL	(STAT_DECODE	<< 1)
 
 
 static inline int choose_coding(void *data, int32_t size)

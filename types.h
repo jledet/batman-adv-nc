@@ -26,6 +26,7 @@
 
 #include "packet.h"
 #include "bitarray.h"
+#include <linux/seqlock.h>
 
 #define BAT_HEADER_LEN (sizeof(struct ethhdr) + \
 	((sizeof(struct unicast_packet) > sizeof(struct bcast_packet) ? \
@@ -174,7 +175,21 @@ struct bat_skb_cb {
 };
 
 struct catwoman_stats {
-	atomic_t coded;
+	seqlock_t lock;			/* seqlock for fast write operation */
+	struct timespec timestamp;	/* Timestamp of data */
+
+	/* Generic node stats */
+	atomic_t transmitted;		/* Packets transmitted */
+	atomic_t received;		/* Packets received */
+
+	/* Relay node stats */
+	atomic_t forwarded;		/* Packets forwarded */
+	atomic_t coded;			/* Packets coded */
+	atomic_t dropped;		/* Packets dropped */
+
+	/* End node stats */
+	atomic_t decoded;		/* Packets decoded */
+	atomic_t failed;		/* Packets that failed to be decoded */
 };
 
 struct bat_priv {
