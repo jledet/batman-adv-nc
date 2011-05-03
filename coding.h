@@ -8,6 +8,8 @@
 
 int coding_init(struct bat_priv *bat_priv);
 void coding_free(struct bat_priv *bat_priv);
+int is_coding_neighbor(struct orig_node *orig_node,
+		       struct batman_packet *batman_packet);
 void coding_orig_neighbor(struct bat_priv *bat_priv,
 		struct orig_node *orig_node,
 		struct orig_node *neigh_node,

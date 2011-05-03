@@ -82,6 +82,19 @@ int add_coding_node(struct orig_node *orig_node,
 	return 0;
 }
 
+int is_coding_neighbor(struct orig_node *orig_node,
+		       struct batman_packet *batman_packet)
+{
+	if (orig_node->last_real_seqno != batman_packet->seqno)
+		return 0;
+	if (orig_node->last_ttl != batman_packet->ttl + 1)
+		return 0;
+	if (!compare_eth(batman_packet->orig, batman_packet->prev_sender))
+		return 0;
+	
+	return 1;
+}
+
 void coding_orig_neighbor(struct bat_priv *bat_priv,
 			  struct orig_node *orig_node,
 			  struct orig_node *neigh_orig_node,
@@ -190,6 +203,7 @@ void work_coding_packets(struct bat_priv *bat_priv)
 				if (coding_packet_timeout(bat_priv, coding_packet)) {
 					list_del_rcu(&coding_packet->list);
 					atomic_dec(&bat_priv->coding_hash_count);
+					printk(KERN_DEBUG "Coding packet id %d timed out\n", coding_packet->id);
 					coding_send_packet(coding_packet);
 				}
 			}
@@ -325,7 +339,7 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 	spinlock_t *lock;
 	int index, i;
 	uint8_t hash_key[ETH_ALEN];
-#if 0
+
 	struct netdev_queue *netq;
 	int numq, qlen;
 	
@@ -343,7 +357,6 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 		}
 		netif_tx_unlock(netdev);
 	}
-#endif
 
 	rcu_read_lock();
 	hlist_for_each_entry_rcu(out_coding_node, node,
@@ -579,15 +592,15 @@ int show_coding_neighbors(struct seq_file *seq, void *offset)
 		rcu_read_lock();
 		hlist_for_each_entry_rcu(orig_node, node, head, hash_entry) {
 			seq_printf(seq, "Node:      %pM\n", orig_node->orig);
+			
 			seq_printf(seq, " Ingoing:  ");
-			hlist_for_each_entry_rcu(coding_node, node_neigh, &orig_node->in_coding_list, list) {
+			hlist_for_each_entry_rcu(coding_node, node_neigh, &orig_node->in_coding_list, list)
 				seq_printf(seq, "%pM ", coding_node->addr);
-			}
 			seq_printf(seq, "\n");
+
 			seq_printf(seq, " Outgoing: ");
-			hlist_for_each_entry_rcu(coding_node, node_neigh, &orig_node->out_coding_list, list) {
-				seq_printf(seq, "%pM", coding_node->addr);
-			}
+			hlist_for_each_entry_rcu(coding_node, node_neigh, &orig_node->out_coding_list, list)
+				seq_printf(seq, "%pM ", coding_node->addr);
 			seq_printf(seq, "\n");
 
 		}

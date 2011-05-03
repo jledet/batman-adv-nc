@@ -10,3 +10,4 @@ tags
 *.mod.c
 *.order
 .tmp_versions
+documentation

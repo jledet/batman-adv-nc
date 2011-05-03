@@ -746,11 +746,9 @@ void receive_bat_packet(struct ethhdr *ethhdr,
 	 * is only decremented by one, we add a coding possibility
 	 * and originator is our neighbor */
 	if (atomic_read(&bat_priv->catwoman))
-		if ((orig_node->last_real_seqno == batman_packet->seqno)
-				&& (orig_node->last_ttl == batman_packet->ttl + 1) 
-				&& compare_eth(batman_packet->orig, batman_packet->prev_sender)) {
-			coding_orig_neighbor(bat_priv, orig_node, orig_neigh_node, batman_packet);
-		}
+		if (is_coding_neighbor(orig_node, batman_packet))
+			coding_orig_neighbor(bat_priv, orig_node,
+					orig_neigh_node, batman_packet);
 
 	is_duplicate = count_real_packets(ethhdr, batman_packet, if_incoming);
 
@@ -1260,20 +1258,19 @@ static int check_unicast_packet(struct sk_buff *skb, int hdr_size)
 
 	/* drop packet if it has not necessary minimum size */
 	if (unlikely(!pskb_may_pull(skb, hdr_size)))
-		return -2;
+		return -1;
 
 	/* not for me */
-	if (!is_my_mac(ethhdr->h_dest)) {
+	if (!is_my_mac(ethhdr->h_dest)) 
 		return -1;
-	}
 
 	/* packet with unicast indication but broadcast recipient */
 	if (is_broadcast_ether_addr(ethhdr->h_dest))
-		return -2;
+		return -1;
 
 	/* packet with broadcast sender address */
 	if (is_broadcast_ether_addr(ethhdr->h_source))
-		return -2;
+		return -1;
 
 	return 0;
 }
@@ -1372,16 +1369,11 @@ int recv_unicast_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 {
 	struct unicast_packet *unicast_packet;
 	int hdr_size = sizeof(struct unicast_packet);
+	struct ethhdr *ethhdr = (struct ethhdr *)skb_mac_header(skb);
 
-	switch (check_unicast_packet(skb, hdr_size)) {
-	case 0:
-		break;
-
-	case -1:
-		add_decoding_skb(recv_if, skb);
-		return NET_RX_SUCCESS;
-
-	case -2:
+	if (check_unicast_packet(skb, hdr_size) < 0) {
+		if (!is_my_mac(ethhdr->h_dest))
+			add_decoding_skb(recv_if, skb);
 		return NET_RX_DROP;
 	}
 
@@ -1585,6 +1577,7 @@ int recv_coded_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 	if (!is_my_mac(ethhdr->h_dest) && !is_my_mac(coded_packet->second_dest))
 		return NET_RX_DROP;
 
+	/* Try to decode packet */
 	unicast_packet = receive_coded_packet(bat_priv, skb, hdr_size);
 
 	if (!unicast_packet)
