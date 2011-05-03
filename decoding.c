@@ -168,15 +168,17 @@ struct coding_packet *find_decoding_packet(struct bat_priv *bat_priv,
 				spin_lock_bh(&coding_path->packet_list_lock);
 				list_del_rcu(&decoding_packet->list);
 				spin_unlock_bh(&coding_path->packet_list_lock);
-				rcu_read_unlock();
-				return decoding_packet;
+				goto out;
 			}
 		}
 	}
+
+	decoding_packet = NULL;
+	printk(KERN_DEBUG "CW: No decoding packet found for %d\n", id);
+out:
 	rcu_read_unlock();
 
-	printk(KERN_DEBUG "CW: No decoding packet found for %d\n", id);
-	return NULL;
+	return decoding_packet;
 }
 
 /* Attempt to decode coded packet and return decoded unicast packet */
@@ -278,7 +280,7 @@ static void _purge_decoding(struct bat_priv *bat_priv)
 					list_del_rcu(&decoding_packet->list);
 					coding_packet_free_ref(decoding_packet);
 					atomic_dec(&bat_priv->decoding_hash_count);
-					printk(KERN_DEBUG "Decoding packet id %d purged", decoding_packet->id);
+					printk(KERN_DEBUG "Decoding packet id %d purged\n", decoding_packet->id);
 				}
 			}
 			spin_unlock_bh(&decoding_path->packet_list_lock);
