@@ -615,7 +615,7 @@ int show_coding_neighbors(struct seq_file *seq, void *offset)
 
 void stats_reset(struct bat_priv *bat_priv)
 {
-	seqlock_init(&bat_priv->catstat.lock);
+	write_seqlock(&bat_priv->catstat.lock);
 	atomic_set(&bat_priv->catstat.transmitted, 0);
 	atomic_set(&bat_priv->catstat.received, 0);
 	atomic_set(&bat_priv->catstat.forwarded, 0);
@@ -623,6 +623,13 @@ void stats_reset(struct bat_priv *bat_priv)
 	atomic_set(&bat_priv->catstat.dropped, 0);
 	atomic_set(&bat_priv->catstat.decoded, 0);
 	atomic_set(&bat_priv->catstat.failed, 0);
+	write_sequnlock(&bat_priv->catstat.lock);
+}
+
+void stats_init(struct bat_priv *bat_priv)
+{
+	seqlock_init(&bat_priv->catstat.lock);
+	stats_reset(bat_priv);
 }
 
 void stats_update(struct bat_priv *bat_priv, uint32_t flags)
@@ -676,3 +683,13 @@ int coding_stats(struct seq_file *seq, void *offset)
 	
 	return 0;
 }
+
+int coding_stats_reset(struct seq_file *seq, void *offset)
+{
+	struct net_device *net_dev = (struct net_device *)seq->private;
+	struct bat_priv *bat_priv = netdev_priv(net_dev);
+	stats_reset(bat_priv);
+
+	return 0;
+}
+

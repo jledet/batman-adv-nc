@@ -269,6 +269,12 @@ static int coding_stats_open(struct inode *inode, struct file *file)
 	return single_open(file, coding_stats, net_dev);
 }
 
+static int coding_stats_reset_open(struct inode *inode, struct file *file)
+{
+	struct net_device *net_dev = (struct net_device *)inode->i_private;
+	return single_open(file, coding_stats_reset, net_dev);
+}
+
 struct bat_debuginfo {
 	struct attribute attr;
 	const struct file_operations fops;
@@ -294,6 +300,7 @@ static BAT_DEBUGINFO(transtable_local, S_IRUGO, transtable_local_open);
 static BAT_DEBUGINFO(vis_data, S_IRUGO, vis_data_open);
 static BAT_DEBUGINFO(coding_neighbors, S_IRUGO,  coding_neighbors_open);
 static BAT_DEBUGINFO(coding_stats, S_IRUGO, coding_stats_open);
+static BAT_DEBUGINFO(coding_stats_clear, S_IRUGO, coding_stats_reset_open);
 
 static struct bat_debuginfo *mesh_debuginfos[] = {
 	&bat_debuginfo_originators,
@@ -304,6 +311,7 @@ static struct bat_debuginfo *mesh_debuginfos[] = {
 	&bat_debuginfo_vis_data,
 	&bat_debuginfo_coding_neighbors,
 	&bat_debuginfo_coding_stats,
+	&bat_debuginfo_coding_stats_clear,
 	NULL,
 };
 
