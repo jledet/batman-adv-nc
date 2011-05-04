@@ -32,7 +32,6 @@ void stats_update(struct bat_priv *bat_priv, uint32_t flags);
 #define STAT_DECODE	(STAT_CODE	<< 1)
 #define STAT_FAIL	(STAT_DECODE	<< 1)
 
-
 static inline int choose_coding(void *data, int32_t size)
 {
 	unsigned char *key = data;

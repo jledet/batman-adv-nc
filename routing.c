@@ -1347,7 +1347,6 @@ int route_unicast_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 
 	/* Code packet if possible */
 	if (atomic_read(&bat_priv->catwoman) && !((struct bat_skb_cb *)skb->cb)->decoded) {
-		stats_update(bat_priv, STAT_XMIT | STAT_CODED);
 		add_coding_skb(skb, neigh_node, ethhdr);
 	} else {
 		stats_update(bat_priv, STAT_XMIT);
@@ -1373,6 +1372,7 @@ int recv_unicast_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 	struct unicast_packet *unicast_packet;
 	int hdr_size = sizeof(struct unicast_packet);
 	struct ethhdr *ethhdr = (struct ethhdr *)skb_mac_header(skb);
+	struct bat_priv *bat_priv = netdev_priv(recv_if->soft_iface);
 
 	if (check_unicast_packet(skb, hdr_size) < 0) {
 		if (!is_my_mac(ethhdr->h_dest)) {
@@ -1387,10 +1387,12 @@ int recv_unicast_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 
 	/* packet for me */
 	if (is_my_mac(unicast_packet->dest)) {
+		stats_update(bat_priv, STAT_RECV);
 		interface_rx(recv_if->soft_iface, skb, recv_if, hdr_size);
 		return NET_RX_SUCCESS;
 	}
 
+	stats_update(bat_priv, STAT_FORWARD);
 	return route_unicast_packet(skb, recv_if);
 }
 
@@ -1586,8 +1588,13 @@ int recv_coded_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 	/* Try to decode packet */
 	unicast_packet = receive_coded_packet(bat_priv, skb, hdr_size);
 
-	if (!unicast_packet)
+	if (!unicast_packet) {
+		stats_update(bat_priv, STAT_RECV | STAT_FAIL);
 		return NET_RX_DROP;
+	} else {
+		stats_update(bat_priv, STAT_DECODE);
+	}
+
 
 	/* Mark packet as decoded to avoid recoding when forwarding */
 	((struct bat_skb_cb *)skb->cb)->decoded = 1;

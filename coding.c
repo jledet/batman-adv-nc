@@ -498,8 +498,10 @@ int add_coding_skb(struct sk_buff *skb,
 	if (unicast_packet->packet_type != BAT_UNICAST)
 		return NET_RX_DROP;
 
-	if (send_coded_packet(skb, neigh_node, ethhdr))
+	if (send_coded_packet(skb, neigh_node, ethhdr)) {
+		stats_update(bat_priv, STAT_XMIT | STAT_CODE);
 		return NET_RX_SUCCESS;
+	}
 
 	coding_packet = kzalloc(sizeof(struct coding_packet), GFP_ATOMIC);
 
@@ -625,7 +627,7 @@ void stats_reset(struct bat_priv *bat_priv)
 
 void stats_update(struct bat_priv *bat_priv, uint32_t flags)
 {
-	if (flags) {
+	if (bat_priv && flags) {
 		write_seqlock(&bat_priv->catstat.lock);
 		if (flags & STAT_XMIT)
 			atomic_inc(&bat_priv->catstat.transmitted);
