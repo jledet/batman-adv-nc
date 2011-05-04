@@ -95,7 +95,6 @@ int send_skb_packet(struct sk_buff *skb,
 
 	/* Store packet for later network decoding */
 	bat_priv = netdev_priv(hard_iface->soft_iface);
-	stats_update(bat_priv, STAT_XMIT);
 	if (atomic_read(&bat_priv->catwoman)) {
 		skb_decoding = skb_clone(skb, GFP_ATOMIC);
 

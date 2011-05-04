@@ -1346,10 +1346,13 @@ int route_unicast_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 	unicast_packet->ttl--;
 
 	/* Code packet if possible */
-	if (atomic_read(&bat_priv->catwoman) && !((struct bat_skb_cb *)skb->cb)->decoded)
+	if (atomic_read(&bat_priv->catwoman) && !((struct bat_skb_cb *)skb->cb)->decoded) {
+		stats_update(bat_priv, STAT_XMIT | STAT_CODED);
 		add_coding_skb(skb, neigh_node, ethhdr);
-	else
+	} else {
+		stats_update(bat_priv, STAT_XMIT);
 		send_skb_packet(skb, neigh_node->if_incoming, neigh_node->addr);
+	}
 
 	/* route it */
 	ret = NET_RX_SUCCESS;
