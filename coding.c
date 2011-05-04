@@ -177,8 +177,8 @@ void work_coding_packets(struct bat_priv *bat_priv)
 	struct hashtable_t *hash = bat_priv->coding_hash;
 	struct hlist_node *node;
 	struct hlist_head *head;
-	spinlock_t *list_lock, *packet_list_lock;
-	struct coding_packet *coding_packet, *coding_packet_tmp;
+	spinlock_t *packet_list_lock;
+	struct coding_packet *coding_packet;
 	struct coding_path *coding_path;
 	int i;
 
@@ -188,29 +188,28 @@ void work_coding_packets(struct bat_priv *bat_priv)
 	/* Loop hash table bins */
 	for (i = 0; i < hash->size; i++) {
 		head = &hash->table[i];
-		list_lock = &hash->list_locks[i];
-
-		spin_lock_bh(list_lock);
 
 		/* Loop coding paths */
-		hlist_for_each_entry(coding_path, node, head, hash_entry) {
+		rcu_read_lock();
+		hlist_for_each_entry_rcu(coding_path, node, head, hash_entry) {
 			packet_list_lock = &coding_path->packet_list_lock;
-			
-			spin_lock_bh(packet_list_lock);
 
 			/* Loop packets */
-			list_for_each_entry_safe(coding_packet, coding_packet_tmp, &coding_path->packet_list, list) {
-				if (coding_packet_timeout(bat_priv, coding_packet)) {
-					list_del_rcu(&coding_packet->list);
-					atomic_dec(&bat_priv->coding_hash_count);
-					printk(KERN_DEBUG "Coding packet id %d timed out\n", coding_packet->id);
-					stats_update(bat_priv, STAT_FORWARD);
-					coding_send_packet(coding_packet);
-				}
+			spin_lock_bh(packet_list_lock);
+			list_for_each_entry_rcu(coding_packet, &coding_path->packet_list, list) {
+				/* Packets are added to tail */
+				if (!coding_packet_timeout(bat_priv, coding_packet))
+					break;
+
+				list_del_rcu(&coding_packet->list);
+				atomic_dec(&bat_priv->coding_hash_count);
+				printk(KERN_DEBUG "Coding packet id %d timed out\n", coding_packet->id);
+				stats_update(bat_priv, STAT_FORWARD);
+				coding_send_packet(coding_packet);
 			}
 			spin_unlock_bh(packet_list_lock);
 		}
-		spin_unlock_bh(list_lock);
+		rcu_read_unlock();
 	}
 }
 
@@ -334,12 +333,11 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 					 struct ethhdr *ethhdr)
 {
 	struct hashtable_t *hash = bat_priv->coding_hash;
-	struct hlist_node *node, *p_node, *p_node_tmp;
+	struct hlist_node *node, *p_node;
 	struct orig_node *orig_node = get_orig_node(bat_priv, ethhdr->h_source);
 	struct coding_node *out_coding_node;
 	struct coding_packet *coding_packet = NULL;
 	struct coding_path *coding_path;
-	spinlock_t *lock;
 	int index, i;
 	uint8_t hash_key[ETH_ALEN];
 #if 0
@@ -370,15 +368,9 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 			hash_key[i] = in_coding_node->addr[i] ^ 
 				out_coding_node->addr[ETH_ALEN-1-i];
 		index = choose_coding(hash_key, hash->size);
-		lock = &hash->list_locks[index];
 
-		spin_lock_bh(lock);
-		hlist_for_each_entry_safe(coding_path, p_node, p_node_tmp,
+		hlist_for_each_entry_rcu(coding_path, p_node,
 				&hash->table[index], hash_entry) {
-
-			if (list_empty(&coding_path->packet_list))
-				continue;
-
 			if (!compare_eth(coding_path->prev_hop,
 						in_coding_node->addr))
 				continue;
@@ -387,25 +379,25 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 						out_coding_node->addr))
 				continue;
 
-			atomic_dec(&bat_priv->coding_hash_count);
-
 			spin_lock_bh(&coding_path->packet_list_lock);
 
-			coding_packet =
-				list_first_entry(&coding_path->packet_list,
+			if (!list_empty(&coding_path->packet_list)) {
+				atomic_dec(&bat_priv->coding_hash_count);
+				coding_packet =
+					list_first_entry(&coding_path->packet_list,
 						struct coding_packet, list);
+				list_del_rcu(&coding_packet->list);
 
-			list_del_rcu(&coding_packet->list);
+				spin_unlock_bh(&coding_path->packet_list_lock);
+				goto out;
+			}
+
 			spin_unlock_bh(&coding_path->packet_list_lock);
-
-			spin_unlock_bh(lock);
-			rcu_read_unlock();
-			goto out;
 		}
-		spin_unlock_bh(lock);
 	}
-	rcu_read_unlock();
+
 out:
+	rcu_read_unlock();
 	return coding_packet;
 }
 
