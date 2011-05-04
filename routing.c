@@ -1372,9 +1372,12 @@ int recv_unicast_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 	struct ethhdr *ethhdr = (struct ethhdr *)skb_mac_header(skb);
 
 	if (check_unicast_packet(skb, hdr_size) < 0) {
-		if (!is_my_mac(ethhdr->h_dest))
+		if (!is_my_mac(ethhdr->h_dest)) {
 			add_decoding_skb(recv_if, skb);
-		return NET_RX_DROP;
+			return NET_RX_SUCCESS;
+		} else {
+			return NET_RX_DROP;
+		}
 	}
 
 	unicast_packet = (struct unicast_packet *)skb->data;

@@ -140,8 +140,6 @@ static void set_real_if(struct bat_priv *bat_priv,
 				netdev->tx_queue_len &&
 				compare_eth(hard_iface->net_dev->dev_addr, 
 					netdev->dev_addr)) {
-				printk(KERN_DEBUG "Assuming %s is the real device\n",
-						netdev->name);
 				hard_iface->real_net_dev = netdev;
 				break;
 			}
@@ -150,6 +148,7 @@ static void set_real_if(struct bat_priv *bat_priv,
 	} else {
 		hard_iface->real_net_dev = hard_iface->net_dev;
 	}
+	printk("Using %s as real interface\n", hard_iface->real_net_dev->name);
 }
 
 static void set_primary_if(struct bat_priv *bat_priv,
