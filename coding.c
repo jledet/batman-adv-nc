@@ -204,6 +204,7 @@ void work_coding_packets(struct bat_priv *bat_priv)
 					list_del_rcu(&coding_packet->list);
 					atomic_dec(&bat_priv->coding_hash_count);
 					printk(KERN_DEBUG "Coding packet id %d timed out\n", coding_packet->id);
+					stats_update(bat_priv, STAT_FORWARD);
 					coding_send_packet(coding_packet);
 				}
 			}
@@ -322,6 +323,8 @@ void code_packets(struct bat_priv *bat_priv,
 	dev_kfree_skb(skb_src);
 	coding_packet->skb = NULL;
 	coding_packet_free_ref(coding_packet);
+
+	stats_update(bat_priv, STAT_CODE);
 	send_skb_packet(skb_dest, neigh_node->if_incoming, first_dest);
 }
 
@@ -499,7 +502,6 @@ int add_coding_skb(struct sk_buff *skb,
 		return NET_RX_DROP;
 
 	if (send_coded_packet(skb, neigh_node, ethhdr)) {
-		stats_update(bat_priv, STAT_XMIT | STAT_CODE);
 		return NET_RX_SUCCESS;
 	}
 

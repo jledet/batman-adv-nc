@@ -337,6 +337,7 @@ find_router:
 	}
 
 	unicast_packet->decoding_id = get_decoding_id(bat_priv);
+	stats_update(bat_priv, STAT_XMIT);
 	send_skb_packet(skb, neigh_node->if_incoming, neigh_node->addr);
 	ret = 0;
 	goto out;

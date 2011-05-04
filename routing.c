@@ -1349,7 +1349,7 @@ int route_unicast_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 	if (atomic_read(&bat_priv->catwoman) && !((struct bat_skb_cb *)skb->cb)->decoded) {
 		add_coding_skb(skb, neigh_node, ethhdr);
 	} else {
-		stats_update(bat_priv, STAT_XMIT);
+		stats_update(bat_priv, STAT_FORWARD);
 		send_skb_packet(skb, neigh_node->if_incoming, neigh_node->addr);
 	}
 
@@ -1392,7 +1392,6 @@ int recv_unicast_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 		return NET_RX_SUCCESS;
 	}
 
-	stats_update(bat_priv, STAT_FORWARD);
 	return route_unicast_packet(skb, recv_if);
 }
 
@@ -1589,12 +1588,11 @@ int recv_coded_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 	unicast_packet = receive_coded_packet(bat_priv, skb, hdr_size);
 
 	if (!unicast_packet) {
-		stats_update(bat_priv, STAT_RECV | STAT_FAIL);
+		stats_update(bat_priv, STAT_FAIL);
 		return NET_RX_DROP;
 	} else {
 		stats_update(bat_priv, STAT_DECODE);
 	}
-
 
 	/* Mark packet as decoded to avoid recoding when forwarding */
 	((struct bat_skb_cb *)skb->cb)->decoded = 1;
