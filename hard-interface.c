@@ -148,7 +148,7 @@ static void set_real_if(struct bat_priv *bat_priv,
 	} else {
 		hard_iface->real_net_dev = hard_iface->net_dev;
 	}
-	printk("Using %s as real interface\n", hard_iface->real_net_dev->name);
+	printk(KERN_DEBUG "Using %s as real interface\n", hard_iface->real_net_dev->name);
 }
 
 static void set_primary_if(struct bat_priv *bat_priv,
