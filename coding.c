@@ -382,11 +382,11 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 			spin_lock_bh(&coding_path->packet_list_lock);
 
 			if (!list_empty(&coding_path->packet_list)) {
-				atomic_dec(&bat_priv->coding_hash_count);
 				coding_packet =
 					list_first_entry(&coding_path->packet_list,
 						struct coding_packet, list);
 				list_del_rcu(&coding_packet->list);
+				atomic_dec(&bat_priv->coding_hash_count);
 
 				spin_unlock_bh(&coding_path->packet_list_lock);
 				goto out;
@@ -653,7 +653,8 @@ int coding_stats(struct seq_file *seq, void *offset)
 	struct bat_priv *bat_priv = netdev_priv(net_dev);
 	struct catwoman_stats *catstat = &bat_priv->catstat;
 	seqlock_t *lock = &catstat->lock;
-	int transmitted, received, forwarded, coded, dropped, decoded, failed;
+	int transmitted, received, forwarded, coded, dropped, decoded, failed,
+	    coding_list, decoding_list;
 	unsigned long sval;
 
 	do {
@@ -667,6 +668,9 @@ int coding_stats(struct seq_file *seq, void *offset)
 		failed      = atomic_read(&catstat->failed);
 	} while (read_seqretry(lock, sval));
 
+	coding_list = atomic_read(&bat_priv->coding_hash_count);
+	decoding_list = atomic_read(&bat_priv->decoding_hash_count);
+
 	seq_printf(seq, "Transmitted:  %d\n", transmitted);
 	seq_printf(seq, "Received:     %d\n", received);
 	seq_printf(seq, "Forwarded:    %d\n", forwarded);
@@ -674,6 +678,9 @@ int coding_stats(struct seq_file *seq, void *offset)
 	seq_printf(seq, "Dropped:      %d\n", dropped);
 	seq_printf(seq, "Decoded:      %d\n", decoded);
 	seq_printf(seq, "Failed:       %d\n", failed);
+	seq_printf(seq, "\n");
+	seq_printf(seq, "Coding packets:   %d\n", coding_list);
+	seq_printf(seq, "Decoding packets: %d\n", decoding_list);
 	
 	return 0;
 }

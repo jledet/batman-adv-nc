@@ -331,6 +331,7 @@ void decoding_free(struct bat_priv *bat_priv)
 					decoding_packet_tmp, 
 					&decoding_path->packet_list, list) {
 				list_del_rcu(&decoding_packet->list);
+				atomic_dec(&bat_priv->decoding_hash_count);
 				coding_packet_free_ref(decoding_packet);
 			}
 			spin_unlock_bh(&decoding_path->packet_list_lock);
