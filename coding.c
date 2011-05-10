@@ -29,11 +29,10 @@ int orig_has_neighbor(struct orig_node *orig_node,
 		      struct orig_node *neigh_orig_node)
 {
 	struct coding_node *tmp_coding_node;
-	struct hlist_node *node;
 	int ret = 0;
 
 	rcu_read_lock();
-	hlist_for_each_entry_rcu(tmp_coding_node, node,
+	list_for_each_entry_rcu(tmp_coding_node,
 				 &orig_node->out_coding_list, list) {
 		if (compare_eth(tmp_coding_node->addr,
 				neigh_orig_node->orig)) {
@@ -61,22 +60,22 @@ int add_coding_node(struct orig_node *orig_node,
 		return -1;
 	}
 
-	INIT_HLIST_NODE(&in_coding_node->list);
+	INIT_LIST_HEAD(&in_coding_node->list);
 	memcpy(in_coding_node->addr, orig_node->orig, ETH_ALEN);
 	in_coding_node->orig_node = neigh_orig_node;
 	atomic_set(&in_coding_node->refcount, 1);
 
-	INIT_HLIST_NODE(&out_coding_node->list);
+	INIT_LIST_HEAD(&out_coding_node->list);
 	memcpy(out_coding_node->addr, neigh_orig_node->orig, ETH_ALEN);
 	out_coding_node->orig_node = orig_node;
 	atomic_set(&out_coding_node->refcount, 1);
 
 	spin_lock_bh(&orig_node->in_coding_list_lock);
-	hlist_add_head_rcu(&in_coding_node->list, &neigh_orig_node->in_coding_list);
+	list_add_tail_rcu(&in_coding_node->list, &neigh_orig_node->in_coding_list);
 	spin_unlock_bh(&orig_node->in_coding_list_lock);
 
 	spin_lock_bh(&orig_node->out_coding_list_lock);
-	hlist_add_head_rcu(&out_coding_node->list, &orig_node->out_coding_list);
+	list_add_tail_rcu(&out_coding_node->list, &orig_node->out_coding_list);
 	spin_unlock_bh(&orig_node->out_coding_list_lock);
 
 	return 0;
@@ -203,7 +202,6 @@ void work_coding_packets(struct bat_priv *bat_priv)
 
 				list_del_rcu(&coding_packet->list);
 				atomic_dec(&bat_priv->coding_hash_count);
-				printk(KERN_DEBUG "Coding packet id %d timed out\n", coding_packet->id);
 				stats_update(bat_priv, STAT_FORWARD);
 				coding_send_packet(coding_packet);
 			}
@@ -333,7 +331,7 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 					 struct ethhdr *ethhdr)
 {
 	struct hashtable_t *hash = bat_priv->coding_hash;
-	struct hlist_node *node, *p_node;
+	struct hlist_node *node;
 	struct orig_node *orig_node = get_orig_node(bat_priv, ethhdr->h_source);
 	struct coding_node *out_coding_node;
 	struct coding_packet *coding_packet = NULL;
@@ -361,7 +359,7 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 #endif
 
 	rcu_read_lock();
-	hlist_for_each_entry_rcu(out_coding_node, node,
+	list_for_each_entry_rcu(out_coding_node,
 			&orig_node->out_coding_list, list) {
 		/* Create almost unique path key */
 		for (i = 0; i < ETH_ALEN; ++i)
@@ -369,7 +367,7 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 				out_coding_node->addr[ETH_ALEN-1-i];
 		index = choose_coding(hash_key, hash->size);
 
-		hlist_for_each_entry_rcu(coding_path, p_node,
+		hlist_for_each_entry_rcu(coding_path, node,
 				&hash->table[index], hash_entry) {
 			if (!compare_eth(coding_path->prev_hop,
 						in_coding_node->addr))
@@ -408,14 +406,13 @@ int send_coded_packet(struct sk_buff *skb,
 {
 	struct bat_priv *bat_priv =
 		netdev_priv(neigh_node->if_incoming->soft_iface);
-	struct hlist_node *node;
 	struct orig_node *orig_node = neigh_node->orig_node;
 	struct coding_node *coding_node;
 	struct coding_packet *coding_packet;
 
 	/* for neighbor of orig_node */
 	rcu_read_lock();
-	hlist_for_each_entry_rcu(coding_node, node,
+	list_for_each_entry_rcu(coding_node,
 			&orig_node->in_coding_list, list) {
 		if (compare_eth(coding_node->addr, ethhdr->h_source))
 			continue;
@@ -577,7 +574,7 @@ int show_coding_neighbors(struct seq_file *seq, void *offset)
 	struct net_device *net_dev = (struct net_device *)seq->private;
 	struct bat_priv *bat_priv = netdev_priv(net_dev);
 	struct hashtable_t *hash = bat_priv->orig_hash;
-	struct hlist_node *node, *node_neigh;
+	struct hlist_node *node;
 	struct hlist_head *head;
 	struct orig_node *orig_node;
 	struct coding_node *coding_node;
@@ -591,12 +588,12 @@ int show_coding_neighbors(struct seq_file *seq, void *offset)
 			seq_printf(seq, "Node:      %pM\n", orig_node->orig);
 			
 			seq_printf(seq, " Ingoing:  ");
-			hlist_for_each_entry_rcu(coding_node, node_neigh, &orig_node->in_coding_list, list)
+			list_for_each_entry_rcu(coding_node, &orig_node->in_coding_list, list)
 				seq_printf(seq, "%pM ", coding_node->addr);
 			seq_printf(seq, "\n");
 
 			seq_printf(seq, " Outgoing: ");
-			hlist_for_each_entry_rcu(coding_node, node_neigh, &orig_node->out_coding_list, list)
+			list_for_each_entry_rcu(coding_node, &orig_node->out_coding_list, list)
 				seq_printf(seq, "%pM ", coding_node->addr);
 			seq_printf(seq, "\n");
 

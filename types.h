@@ -101,8 +101,8 @@ struct orig_node {
 				      *	 last_bcast_seqno */
 	atomic_t bond_candidates;
 	struct list_head bond_list;
-	struct hlist_head in_coding_list;
-	struct hlist_head out_coding_list;
+	struct list_head in_coding_list;
+	struct list_head out_coding_list;
 	spinlock_t in_coding_list_lock;
 	spinlock_t out_coding_list_lock;
 };
@@ -140,7 +140,7 @@ struct neigh_node {
  *	coding_node
  */
 struct coding_node {
-	struct hlist_node list;
+	struct list_head list;
 	uint8_t addr[ETH_ALEN];
 	atomic_t refcount;
 	struct rcu_head rcu;

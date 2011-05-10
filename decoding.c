@@ -280,7 +280,6 @@ static void _purge_decoding(struct bat_priv *bat_priv)
 					list_del_rcu(&decoding_packet->list);
 					coding_packet_free_ref(decoding_packet);
 					atomic_dec(&bat_priv->decoding_hash_count);
-					printk(KERN_DEBUG "Decoding packet id %d purged\n", decoding_packet->id);
 				}
 			}
 			spin_unlock_bh(&decoding_path->packet_list_lock);
