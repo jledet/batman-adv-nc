@@ -6,7 +6,17 @@
 #include <linux/netdevice.h>
 #include <net/sch_generic.h>
 
-int coding_thread(void *data);
+static void forward_coding_packets(struct work_struct *work);
+
+static void start_coding_timer(struct bat_priv *bat_priv)
+{
+        unsigned long hold = atomic_read(&bat_priv->catwoman_hold);
+        printk(KERN_DEBUG "Init coding work");
+	INIT_DELAYED_WORK(&bat_priv->coding_work, forward_coding_packets);
+        printk(KERN_DEBUG "Queue work");
+	queue_delayed_work(bat_event_workqueue, &bat_priv->coding_work,
+                (hold * HZ)/MSEC_PER_SEC);
+}
 
 /* Init coding hash table and kthread */
 int coding_init(struct bat_priv *bat_priv)
@@ -17,9 +27,9 @@ int coding_init(struct bat_priv *bat_priv)
 	if (!bat_priv->coding_hash)
 		return -1;
 
-	bat_priv->coding_thread = kthread_create(coding_thread,
-			(void *)bat_priv, "catwomand");
-	wake_up_process(bat_priv->coding_thread);
+        printk(KERN_DEBUG "Start coding timer");
+	start_coding_timer(bat_priv);
+        printk(KERN_DEBUG "Coding timer started");
 
 	return 0;
 }
@@ -150,15 +160,8 @@ static inline int coding_packet_timeout(struct bat_priv *bat_priv,
 					struct coding_packet *coding_packet)
 {
 	unsigned int hold = atomic_read(&bat_priv->catwoman_hold);
-	unsigned int sec = hold / MSEC_PER_SEC;
-	struct timespec timeout = {
-		sec, 
-		(hold - sec * MSEC_PER_SEC) * NSEC_PER_MSEC,
-	};
-	struct timespec now = current_kernel_time();
-	timeout = timespec_sub(now, timeout);
-
-	return timespec_compare(&coding_packet->timespec, &timeout) < 0 ? 1 : 0;
+	return time_is_before_jiffies(
+			coding_packet->timestamp + (hold*HZ) / MSEC_PER_SEC);
 }
 
 /* Send coded packet */
@@ -171,7 +174,7 @@ void coding_send_packet(struct coding_packet *coding_packet)
 }
 
 /* Traverse coding packet pool and send timed out packets */
-void work_coding_packets(struct bat_priv *bat_priv)
+static void _forward_coding_packets(struct bat_priv *bat_priv)
 {
 	struct hashtable_t *hash = bat_priv->coding_hash;
 	struct hlist_node *node;
@@ -179,7 +182,9 @@ void work_coding_packets(struct bat_priv *bat_priv)
 	spinlock_t *packet_list_lock;
 	struct coding_packet *coding_packet;
 	struct coding_path *coding_path;
-	int i;
+	int i, count = 0, queue = atomic_read(&bat_priv->coding_hash_count);
+
+        printk(KERN_DEBUG "Forwarded %i of %i packets (%lu)", count, queue, jiffies);
 
 	if (!hash)
 		return;
@@ -204,6 +209,7 @@ void work_coding_packets(struct bat_priv *bat_priv)
 				atomic_dec(&bat_priv->coding_hash_count);
 				stats_update(bat_priv, STAT_FORWARD);
 				coding_send_packet(coding_packet);
+                                count++;
 			}
 			spin_unlock_bh(packet_list_lock);
 		}
@@ -211,17 +217,15 @@ void work_coding_packets(struct bat_priv *bat_priv)
 	}
 }
 
-/* Coding packet worker thread */
-int coding_thread(void *data)
+static void forward_coding_packets(struct work_struct *work)
 {
-	struct bat_priv *bat_priv = (struct bat_priv *)data;
+	struct delayed_work *delayed_work =
+		container_of(work, struct delayed_work, work);
+	struct bat_priv *bat_priv =
+		container_of(delayed_work, struct bat_priv, coding_work);
 
-	while (!kthread_should_stop()) {
-		msleep(atomic_read(&bat_priv->catwoman_hold));
-		work_coding_packets(bat_priv);
-	}
-
-	return 0;
+        _forward_coding_packets(bat_priv);
+        start_coding_timer(bat_priv);
 }
 
 /* Code packets and create coding packet */
@@ -338,25 +342,6 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 	struct coding_path *coding_path;
 	int index, i;
 	uint8_t hash_key[ETH_ALEN];
-#if 0
-	struct netdev_queue *netq;
-	int numq, qlen;
-	
-	/* Loop through hard iface transmit queues */
-	struct net_device *netdev = bat_priv->primary_if->real_net_dev;
-	if (netdev) {
-		netif_tx_lock(netdev);
-		numq = netdev->num_tx_queues;
-		for (i = 0; i < numq; i++) {
-			netq = netdev_get_tx_queue(netdev, i);
-			qlen = netq->qdisc->q.qlen;
-			printk(KERN_DEBUG "%s queue%d [%d/%lu]\r\n",
-					netdev->name, i, 
-					qlen, netdev->tx_queue_len);
-		}
-		netif_tx_unlock(netdev);
-	}
-#endif
 
 	rcu_read_lock();
 	list_for_each_entry_rcu(out_coding_node,
@@ -511,7 +496,6 @@ int add_coding_skb(struct sk_buff *skb,
 	coding_packet->id = unicast_packet->decoding_id;
 	coding_packet->skb = skb;
 	coding_packet->neigh_node = neigh_node;
-	coding_packet->timespec = current_kernel_time();
 	coding_packet->coding_path = coding_path;
 
 	/* Add coding packet to list */
@@ -543,7 +527,7 @@ void coding_free(struct bat_priv *bat_priv)
 		return;
 
 	printk(KERN_DEBUG "Starting coding_packet deletion\n");
-	kthread_stop(bat_priv->coding_thread);
+	cancel_delayed_work_sync(&bat_priv->coding_work);
 
 	for (i = 0; i < coding_hash->size; i++) {
 		head = &coding_hash->table[i];

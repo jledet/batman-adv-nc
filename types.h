@@ -164,7 +164,6 @@ struct coding_packet {
 	atomic_t refcount;
 	uint16_t id;
 	unsigned long timestamp;
-	struct timespec timespec;
 	struct neigh_node *neigh_node;
 	struct sk_buff *skb;
 	struct coding_path *coding_path;
@@ -248,7 +247,7 @@ struct bat_priv {
 	atomic_t coding_hash_count;
 	atomic_t decoding_hash_count;
 	struct delayed_work decoding_work;
-	struct task_struct *coding_thread;
+	struct delayed_work coding_work;
 	atomic_t last_decoding_id;
 	struct catwoman_stats catstat;
 };
