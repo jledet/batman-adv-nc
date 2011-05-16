@@ -145,6 +145,7 @@ struct coding_node {
 	atomic_t refcount;
 	struct rcu_head rcu;
 	struct orig_node *orig_node;
+	uint8_t topology;
 };
 
 struct coding_path {
@@ -185,6 +186,8 @@ struct catwoman_stats {
 	atomic_t forwarded;		/* Packets forwarded */
 	atomic_t coded;			/* Packets coded */
 	atomic_t dropped;		/* Packets dropped */
+	atomic_t coded_ab;		/* Packets coded to ab */
+	atomic_t coded_x;		/* Packets coded to x */
 
 	/* End node stats */
 	atomic_t decoded;		/* Packets decoded */

@@ -26,6 +26,9 @@ int coding_stats_reset(struct seq_file *seq, void *offset);
 void stats_init(struct bat_priv *bat_priv);
 void stats_reset(struct bat_priv *bat_priv);
 void stats_update(struct bat_priv *bat_priv, uint32_t flags);
+void topology_stats_update(struct bat_priv *bat_priv,
+			   struct coding_node *in_coding_node,
+			   struct coding_node *out_coding_node);
 
 #define STAT_XMIT	1
 #define STAT_RECV	(STAT_XMIT	<< 1)
@@ -33,6 +36,11 @@ void stats_update(struct bat_priv *bat_priv, uint32_t flags);
 #define STAT_CODE	(STAT_FORWARD	<< 1)
 #define STAT_DECODE	(STAT_CODE	<< 1)
 #define STAT_FAIL	(STAT_DECODE	<< 1)
+#define STAT_CODED_AB	(STAT_FAIL	<< 1)
+#define STAT_CODED_X	(STAT_CODED_AB	<< 1)
+
+#define TOPOLOGY_AB 1
+#define TOPOLOGY_X 2
 
 static inline int choose_coding(void *data, int32_t size)
 {
