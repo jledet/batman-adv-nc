@@ -5,6 +5,7 @@
 #include "decoding.h"
 #include "hash.h"
 #include <linux/netdevice.h>
+#include <linux/random.h>
 #include <net/sch_generic.h>
 
 static void forward_coding_packets(struct work_struct *work);
@@ -245,21 +246,26 @@ void code_packets(struct bat_priv *bat_priv,
 	const int header_add =
 		sizeof(struct coded_packet) - sizeof(struct unicast_packet);
 	unsigned int coding_len;
-	uint8_t coding_packet_first = 0;
+	uint8_t coding_packet_first = 0, tq_avg_neigh, tq_avg_coding;
+	uint8_t rand_val, rand_tq_neigh, rand_tq_coding;
 	struct sk_buff *skb_dest, *skb_src;
 	struct unicast_packet *unicast_packet1;
 	struct unicast_packet *unicast_packet2;
 	struct coded_packet *coded_packet;
 	uint8_t *first_source, *first_dest, *second_source, *second_dest;
 
-	/* If enabled, choose mac-dest based on lowest link quality. Otherwise
-	 * use skb-length */
-	if (atomic_read(&bat_priv->catwoman_tq)) {
-		if (neigh_node->orig_node->router->tq_avg >=
-				coding_packet->neigh_node->orig_node->router->tq_avg)
+	/* If enabled, choose random mac-dest based on weighted link quality. 
+	 * Otherwise, always use weakest node */
+	tq_avg_neigh = neigh_node->orig_node->router->tq_avg;
+	tq_avg_coding = coding_packet->neigh_node->orig_node->router->tq_avg;
+	if (atomic_read(&bat_priv->catwoman_random_tq)) {
+		get_random_bytes(&rand_val, 1);
+		rand_tq_neigh = (rand_val * (255 - tq_avg_neigh)) / 255;
+		rand_tq_coding = (rand_val * (255 - tq_avg_coding)) / 255;
+		if (rand_tq_neigh >= rand_tq_coding)
 			coding_packet_first = 1;
 	} else {
-		if (skb->len <= coding_packet->skb->len)
+		if (tq_avg_neigh >= tq_avg_coding)
 			coding_packet_first = 1;
 	}
 
