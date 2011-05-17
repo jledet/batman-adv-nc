@@ -158,7 +158,7 @@ static inline int coding_packet_timeout(struct bat_priv *bat_priv,
 	struct timespec now = current_kernel_time();
 	timeout = timespec_sub(now, timeout);
 
-	return timespec_compare(&coding_packet->timespec, &timeout) < 0 ? 1 : 0;
+	return timespec_compare(&coding_packet->timespec, &timeout) < 0;
 }
 
 /* Send coded packet */
