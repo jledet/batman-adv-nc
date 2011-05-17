@@ -279,9 +279,9 @@ void code_packets(struct bat_priv *bat_priv,
 	}
 
 	/* The skb is also used for decoding, so copy before code */
-	skb_dest = skb_copy(skb_dest, GFP_ATOMIC);
+	/*skb_dest = skb_copy(skb_dest, GFP_ATOMIC);
 	if(!skb_dest)
-		return;
+		return;*/
 
 	coding_len = skb_src->len - unicast_size;
 
@@ -425,8 +425,8 @@ int send_coded_packet(struct sk_buff *skb,
 
 		if (coding_packet) {
 			/* Save packets for later decoding */
-			add_decoding_skb(coding_packet->neigh_node->if_incoming, coding_packet->skb);
-			add_decoding_skb(neigh_node->if_incoming, skb);
+			/*add_decoding_skb(coding_packet->neigh_node->if_incoming, coding_packet->skb);*/
+			/*add_decoding_skb(neigh_node->if_incoming, skb);*/
 			code_packets(bat_priv, skb, ethhdr, coding_packet,
 					neigh_node);
 			goto out;
