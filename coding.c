@@ -247,7 +247,7 @@ void code_packets(struct bat_priv *bat_priv,
 		sizeof(struct coded_packet) - sizeof(struct unicast_packet);
 	unsigned int coding_len;
 	uint8_t coding_packet_first = 0, tq_avg_neigh, tq_avg_coding;
-	uint8_t rand_val, rand_tq_neigh, rand_tq_coding;
+	uint8_t rand_val_neigh, rand_val_coding, rand_tq_neigh, rand_tq_coding;
 	struct sk_buff *skb_dest, *skb_src;
 	struct unicast_packet *unicast_packet1;
 	struct unicast_packet *unicast_packet2;
@@ -259,9 +259,10 @@ void code_packets(struct bat_priv *bat_priv,
 	tq_avg_neigh = neigh_node->orig_node->router->tq_avg;
 	tq_avg_coding = coding_packet->neigh_node->orig_node->router->tq_avg;
 	if (atomic_read(&bat_priv->catwoman_random_tq)) {
-		get_random_bytes(&rand_val, 1);
-		rand_tq_neigh = (rand_val * (255 - tq_avg_neigh)) / 255;
-		rand_tq_coding = (rand_val * (255 - tq_avg_coding)) / 255;
+		get_random_bytes(&rand_val_neigh, 1);
+		get_random_bytes(&rand_val_coding, 1);
+		rand_tq_neigh = (rand_val_neigh * (255 - tq_avg_neigh)) / 255;
+		rand_tq_coding = (rand_val_coding * (255 - tq_avg_coding)) / 255;
 		if (rand_tq_neigh >= rand_tq_coding)
 			coding_packet_first = 1;
 	} else {
