@@ -2,11 +2,20 @@
 #include "send.h"
 #include "originator.h"
 #include "coding.h"
+#include "decoding.h"
 #include "hash.h"
 #include <linux/netdevice.h>
 #include <net/sch_generic.h>
 
-int coding_thread(void *data);
+static void forward_coding_packets(struct work_struct *work);
+
+static void start_coding_timer(struct bat_priv *bat_priv)
+{
+        unsigned long hold = atomic_read(&bat_priv->catwoman_hold);
+	INIT_DELAYED_WORK(&bat_priv->coding_work, forward_coding_packets);
+	queue_delayed_work(bat_event_workqueue, &bat_priv->coding_work,
+			(hold * HZ)/MSEC_PER_SEC);
+}
 
 /* Init coding hash table and kthread */
 int coding_init(struct bat_priv *bat_priv)
@@ -17,9 +26,7 @@ int coding_init(struct bat_priv *bat_priv)
 	if (!bat_priv->coding_hash)
 		return -1;
 
-	bat_priv->coding_thread = kthread_create(coding_thread,
-			(void *)bat_priv, "catwomand");
-	wake_up_process(bat_priv->coding_thread);
+	start_coding_timer(bat_priv);
 
 	return 0;
 }
@@ -58,6 +65,14 @@ int add_coding_node(struct orig_node *orig_node,
 	if (!out_coding_node) {
 		kfree(in_coding_node);
 		return -1;
+	}
+
+	if (compare_eth(orig_node->orig, neigh_orig_node->orig)) {
+		in_coding_node->topology = TOPOLOGY_AB;
+		out_coding_node->topology = TOPOLOGY_AB;
+	} else {
+		in_coding_node->topology = TOPOLOGY_X;
+		out_coding_node->topology = TOPOLOGY_X;
 	}
 
 	INIT_LIST_HEAD(&in_coding_node->list);
@@ -150,15 +165,8 @@ static inline int coding_packet_timeout(struct bat_priv *bat_priv,
 					struct coding_packet *coding_packet)
 {
 	unsigned int hold = atomic_read(&bat_priv->catwoman_hold);
-	unsigned int sec = hold / MSEC_PER_SEC;
-	struct timespec timeout = {
-		sec, 
-		(hold - sec * MSEC_PER_SEC) * NSEC_PER_MSEC,
-	};
-	struct timespec now = current_kernel_time();
-	timeout = timespec_sub(now, timeout);
-
-	return timespec_compare(&coding_packet->timespec, &timeout) < 0;
+	return time_is_before_jiffies(
+			coding_packet->timestamp + (hold*HZ) / MSEC_PER_SEC);
 }
 
 /* Send coded packet */
@@ -171,7 +179,7 @@ void coding_send_packet(struct coding_packet *coding_packet)
 }
 
 /* Traverse coding packet pool and send timed out packets */
-void work_coding_packets(struct bat_priv *bat_priv)
+static void _forward_coding_packets(struct bat_priv *bat_priv)
 {
 	struct hashtable_t *hash = bat_priv->coding_hash;
 	struct hlist_node *node;
@@ -179,7 +187,9 @@ void work_coding_packets(struct bat_priv *bat_priv)
 	spinlock_t *packet_list_lock;
 	struct coding_packet *coding_packet;
 	struct coding_path *coding_path;
-	int i;
+	int i, count = 0, queue = atomic_read(&bat_priv->coding_hash_count);
+
+	printk(KERN_DEBUG "Forwarded %i of %i packets (%lu)", count, queue, jiffies);
 
 	if (!hash)
 		return;
@@ -204,6 +214,7 @@ void work_coding_packets(struct bat_priv *bat_priv)
 				atomic_dec(&bat_priv->coding_hash_count);
 				stats_update(bat_priv, STAT_FORWARD);
 				coding_send_packet(coding_packet);
+                                count++;
 			}
 			spin_unlock_bh(packet_list_lock);
 		}
@@ -211,17 +222,15 @@ void work_coding_packets(struct bat_priv *bat_priv)
 	}
 }
 
-/* Coding packet worker thread */
-int coding_thread(void *data)
+static void forward_coding_packets(struct work_struct *work)
 {
-	struct bat_priv *bat_priv = (struct bat_priv *)data;
+	struct delayed_work *delayed_work =
+		container_of(work, struct delayed_work, work);
+	struct bat_priv *bat_priv =
+		container_of(delayed_work, struct bat_priv, coding_work);
 
-	while (!kthread_should_stop()) {
-		msleep(atomic_read(&bat_priv->catwoman_hold));
-		work_coding_packets(bat_priv);
-	}
-
-	return 0;
+	_forward_coding_packets(bat_priv);
+	start_coding_timer(bat_priv);
 }
 
 /* Code packets and create coding packet */
@@ -263,6 +272,11 @@ void code_packets(struct bat_priv *bat_priv,
 		skb_dest = skb;
 		skb_src = coding_packet->skb;
 	}
+
+	/* The skb is also used for decoding, so copy before code */
+	skb_dest = skb_copy(skb_dest, GFP_ATOMIC);
+	if(!skb_dest)
+		return;
 
 	coding_len = skb_src->len - unicast_size;
 
@@ -338,25 +352,6 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 	struct coding_path *coding_path;
 	int index, i;
 	uint8_t hash_key[ETH_ALEN];
-#if 0
-	struct netdev_queue *netq;
-	int numq, qlen;
-	
-	/* Loop through hard iface transmit queues */
-	struct net_device *netdev = bat_priv->primary_if->real_net_dev;
-	if (netdev) {
-		netif_tx_lock(netdev);
-		numq = netdev->num_tx_queues;
-		for (i = 0; i < numq; i++) {
-			netq = netdev_get_tx_queue(netdev, i);
-			qlen = netq->qdisc->q.qlen;
-			printk(KERN_DEBUG "%s queue%d [%d/%lu]\r\n",
-					netdev->name, i, 
-					qlen, netdev->tx_queue_len);
-		}
-		netif_tx_unlock(netdev);
-	}
-#endif
 
 	rcu_read_lock();
 	list_for_each_entry_rcu(out_coding_node,
@@ -387,6 +382,9 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 				atomic_dec(&bat_priv->coding_hash_count);
 
 				spin_unlock_bh(&coding_path->packet_list_lock);
+
+				topology_stats_update(bat_priv, in_coding_node, out_coding_node);
+
 				goto out;
 			}
 
@@ -421,6 +419,9 @@ int send_coded_packet(struct sk_buff *skb,
 			find_coding_packet(bat_priv, coding_node, ethhdr);
 
 		if (coding_packet) {
+			/* Save packets for later decoding */
+			add_decoding_skb(coding_packet->neigh_node->if_incoming, coding_packet->skb);
+			add_decoding_skb(neigh_node->if_incoming, skb);
 			code_packets(bat_priv, skb, ethhdr, coding_packet,
 					neigh_node);
 			goto out;
@@ -511,7 +512,6 @@ int add_coding_skb(struct sk_buff *skb,
 	coding_packet->id = unicast_packet->decoding_id;
 	coding_packet->skb = skb;
 	coding_packet->neigh_node = neigh_node;
-	coding_packet->timespec = current_kernel_time();
 	coding_packet->coding_path = coding_path;
 
 	/* Add coding packet to list */
@@ -543,7 +543,7 @@ void coding_free(struct bat_priv *bat_priv)
 		return;
 
 	printk(KERN_DEBUG "Starting coding_packet deletion\n");
-	kthread_stop(bat_priv->coding_thread);
+	cancel_delayed_work_sync(&bat_priv->coding_work);
 
 	for (i = 0; i < coding_hash->size; i++) {
 		head = &coding_hash->table[i];
@@ -611,6 +611,8 @@ void stats_reset(struct bat_priv *bat_priv)
 	atomic_set(&bat_priv->catstat.received, 0);
 	atomic_set(&bat_priv->catstat.forwarded, 0);
 	atomic_set(&bat_priv->catstat.coded, 0);
+	atomic_set(&bat_priv->catstat.coded_ab, 0);
+	atomic_set(&bat_priv->catstat.coded_x, 0);
 	atomic_set(&bat_priv->catstat.dropped, 0);
 	atomic_set(&bat_priv->catstat.decoded, 0);
 	atomic_set(&bat_priv->catstat.failed, 0);
@@ -639,7 +641,36 @@ void stats_update(struct bat_priv *bat_priv, uint32_t flags)
 			atomic_inc(&bat_priv->catstat.decoded);
 		if (flags & STAT_FAIL)
 			atomic_inc(&bat_priv->catstat.failed);
+		if (flags & STAT_CODED_AB)
+			atomic_inc(&bat_priv->catstat.coded_ab);
+		if (flags & STAT_CODED_X)
+			atomic_inc(&bat_priv->catstat.coded_x);
 		write_sequnlock(&bat_priv->catstat.lock);
+	}
+}
+
+void topology_stats_update(struct bat_priv *bat_priv,
+			   struct coding_node *in_coding_node,
+			   struct coding_node *out_coding_node)
+{
+	switch (in_coding_node->topology) {
+		case TOPOLOGY_AB:
+			stats_update(bat_priv, STAT_CODED_AB);
+			break;
+
+		case TOPOLOGY_X:
+			stats_update(bat_priv, STAT_CODED_X);
+			break;
+	}
+
+	switch (out_coding_node->topology) {
+		case TOPOLOGY_AB:
+			stats_update(bat_priv, STAT_CODED_AB);
+			break;
+
+		case TOPOLOGY_X:
+			stats_update(bat_priv, STAT_CODED_X);
+			break;
 	}
 }
 
@@ -651,7 +682,7 @@ int coding_stats(struct seq_file *seq, void *offset)
 	struct catwoman_stats *catstat = &bat_priv->catstat;
 	seqlock_t *lock = &catstat->lock;
 	int transmitted, received, forwarded, coded, dropped, decoded, failed,
-	    coding_list, decoding_list;
+	    coding_list, decoding_list, coded_x, coded_ab;
 	unsigned long sval;
 
 	do {
@@ -663,6 +694,8 @@ int coding_stats(struct seq_file *seq, void *offset)
 		dropped     = atomic_read(&catstat->dropped);
 		decoded     = atomic_read(&catstat->decoded);
 		failed      = atomic_read(&catstat->failed);
+		coded_ab    = atomic_read(&catstat->coded_ab);
+		coded_x     = atomic_read(&catstat->coded_x);
 	} while (read_seqretry(lock, sval));
 
 	coding_list = atomic_read(&bat_priv->coding_hash_count);
@@ -672,6 +705,8 @@ int coding_stats(struct seq_file *seq, void *offset)
 	seq_printf(seq, "Received:     %d\n", received);
 	seq_printf(seq, "Forwarded:    %d\n", forwarded);
 	seq_printf(seq, "Coded:        %d\n", coded);
+	seq_printf(seq, "Coded_ab:     %d\n", coded_ab);
+	seq_printf(seq, "Coded_x:      %d\n", coded_x);
 	seq_printf(seq, "Dropped:      %d\n", dropped);
 	seq_printf(seq, "Decoded:      %d\n", decoded);
 	seq_printf(seq, "Failed:       %d\n", failed);

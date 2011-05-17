@@ -109,10 +109,10 @@ int mesh_init(struct net_device *soft_iface)
 	if (vis_init(bat_priv) < 1)
 		goto err;
 
-	if (coding_init(bat_priv) < 0)
+	if (decoding_init(bat_priv) < 0)
 		goto err;
 
-	if (decoding_init(bat_priv) < 0)
+	if (coding_init(bat_priv) < 0)
 		goto err;
 
 	atomic_set(&bat_priv->mesh_state, MESH_ACTIVE);
