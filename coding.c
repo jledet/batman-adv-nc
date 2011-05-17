@@ -190,8 +190,6 @@ static void _forward_coding_packets(struct bat_priv *bat_priv)
 	struct coding_path *coding_path;
 	int i, count = 0, queue = atomic_read(&bat_priv->coding_hash_count);
 
-	printk(KERN_DEBUG "Forwarded %i of %i packets (%lu)", count, queue, jiffies);
-
 	if (!hash)
 		return;
 
