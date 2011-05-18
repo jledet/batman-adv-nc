@@ -695,7 +695,7 @@ int coding_stats(struct seq_file *seq, void *offset)
 	seqlock_t *lock = &catstat->lock;
 	int transmitted, received, forwarded, coded, dropped, decoded, failed,
 	    coding_list, decoding_list, coded_x, coded_ab,
-	    coding_first, neigh_first;
+	    coded_first, neigh_first;
 	unsigned long sval;
 
 	do {

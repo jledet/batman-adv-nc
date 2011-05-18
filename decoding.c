@@ -34,12 +34,6 @@ int decoding_init(struct bat_priv *bat_priv)
 	return 0;
 }
 
-/* Get next available decoding id */
-uint16_t get_decoding_id(struct bat_priv *bat_priv)
-{
-	return (uint16_t)atomic_inc_return(&bat_priv->last_decoding_id);
-}
-
 /* Decode coded packet in skb with decoding_packet */
 struct unicast_packet *decode_packet(struct sk_buff *skb,
 		struct coding_packet *decoding_packet)
