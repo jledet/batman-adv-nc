@@ -2,6 +2,7 @@
 #define _NET_BATMAN_ADV_CODING_H
 
 #include "hash.h"
+#include <linux/random.h>
 
 #define CATWOMAN_ENABLED 1 /* CATWOMAN enabled as default */
 #define CODING_HOLD 10 /* milliseconds */
@@ -115,6 +116,15 @@ static inline void memxor(char *data1, const char *data2, int len)
 
 	for (i = 0; i < len; ++i)
 		data1[i] = data1[i] ^ data2[i];
+}
+
+static inline uint8_t random_scale_tq(uint8_t orig_tq)
+{
+	uint8_t rand_val;
+
+	get_random_bytes(&rand_val, 1);
+
+	return (rand_val * (TQ_MAX_VALUE - orig_tq)) / TQ_MAX_VALUE;
 }
 
 #endif /* _NET_BATMAN_ADV_CODING_H */

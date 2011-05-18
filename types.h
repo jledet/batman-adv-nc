@@ -188,6 +188,8 @@ struct catwoman_stats {
 	atomic_t dropped;		/* Packets dropped */
 	atomic_t coded_ab;		/* Packets coded to ab */
 	atomic_t coded_x;		/* Packets coded to x */
+	atomic_t coded_first;		/* Random MAC dest, coded packet first */
+	atomic_t neigh_first;		/* Random MAC dest, neighbor first */
 
 	/* End node stats */
 	atomic_t decoded;		/* Packets decoded */

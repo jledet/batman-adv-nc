@@ -188,7 +188,7 @@ static void _forward_coding_packets(struct bat_priv *bat_priv)
 	spinlock_t *packet_list_lock;
 	struct coding_packet *coding_packet;
 	struct coding_path *coding_path;
-	int i, count = 0, queue = atomic_read(&bat_priv->coding_hash_count);
+	int i, count = 0;
 
 	if (!hash)
 		return;
@@ -245,7 +245,7 @@ void code_packets(struct bat_priv *bat_priv,
 		sizeof(struct coded_packet) - sizeof(struct unicast_packet);
 	unsigned int coding_len;
 	uint8_t coding_packet_first = 0, tq_avg_neigh, tq_avg_coding;
-	uint8_t rand_val_neigh, rand_val_coding, rand_tq_neigh, rand_tq_coding;
+	uint8_t rand_tq_neigh, rand_tq_coding;
 	struct sk_buff *skb_dest, *skb_src;
 	struct unicast_packet *unicast_packet1;
 	struct unicast_packet *unicast_packet2;
@@ -257,12 +257,17 @@ void code_packets(struct bat_priv *bat_priv,
 	tq_avg_neigh = neigh_node->orig_node->router->tq_avg;
 	tq_avg_coding = coding_packet->neigh_node->orig_node->router->tq_avg;
 	if (atomic_read(&bat_priv->catwoman_random_tq)) {
-		get_random_bytes(&rand_val_neigh, 1);
-		get_random_bytes(&rand_val_coding, 1);
-		rand_tq_neigh = (rand_val_neigh * (255 - tq_avg_neigh)) / 255;
-		rand_tq_coding = (rand_val_coding * (255 - tq_avg_coding)) / 255;
-		if (rand_tq_neigh >= rand_tq_coding)
+		rand_tq_neigh = random_scale_tq(tq_avg_neigh);
+		rand_tq_coding = random_scale_tq(tq_avg_coding);
+		printk(KERN_DEBUG "NTQ: %d NRTQ: %d CTQ: %d CRTQ: %d\n",
+				tq_avg_neigh, rand_tq_neigh,
+				tq_avg_coding, rand_tq_coding);
+		if (rand_tq_neigh >= rand_tq_coding) {
 			coding_packet_first = 1;
+			atomic_inc(&bat_priv->catstat.coded_first);
+		} else {
+			atomic_inc(&bat_priv->catstat.neigh_first);
+		}
 	} else {
 		if (tq_avg_neigh >= tq_avg_coding)
 			coding_packet_first = 1;
@@ -621,6 +626,8 @@ void stats_reset(struct bat_priv *bat_priv)
 	atomic_set(&bat_priv->catstat.dropped, 0);
 	atomic_set(&bat_priv->catstat.decoded, 0);
 	atomic_set(&bat_priv->catstat.failed, 0);
+	atomic_set(&bat_priv->catstat.coded_first, 0);
+	atomic_set(&bat_priv->catstat.neigh_first, 0);
 	write_sequnlock(&bat_priv->catstat.lock);
 }
 
