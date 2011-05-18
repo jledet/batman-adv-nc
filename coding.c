@@ -694,7 +694,8 @@ int coding_stats(struct seq_file *seq, void *offset)
 	struct catwoman_stats *catstat = &bat_priv->catstat;
 	seqlock_t *lock = &catstat->lock;
 	int transmitted, received, forwarded, coded, dropped, decoded, failed,
-	    coding_list, decoding_list, coded_x, coded_ab;
+	    coding_list, decoding_list, coded_x, coded_ab,
+	    coding_first, neigh_first;
 	unsigned long sval;
 
 	do {
@@ -708,6 +709,8 @@ int coding_stats(struct seq_file *seq, void *offset)
 		failed      = atomic_read(&catstat->failed);
 		coded_ab    = atomic_read(&catstat->coded_ab);
 		coded_x     = atomic_read(&catstat->coded_x);
+		coded_first = atomic_read(&catstat->coded_first);
+		neigh_first = atomic_read(&catstat->neigh_first);
 	} while (read_seqretry(lock, sval));
 
 	coding_list = atomic_read(&bat_priv->coding_hash_count);
@@ -722,6 +725,8 @@ int coding_stats(struct seq_file *seq, void *offset)
 	seq_printf(seq, "Dropped:      %d\n", dropped);
 	seq_printf(seq, "Decoded:      %d\n", decoded);
 	seq_printf(seq, "Failed:       %d\n", failed);
+	seq_printf(seq, "Coded First:  %d\n", coded_first);
+	seq_printf(seq, "Neigh First:  %d\n", neigh_first);
 	seq_printf(seq, "\n");
 	seq_printf(seq, "Coding packets:   %d\n", coding_list);
 	seq_printf(seq, "Decoding packets: %d\n", decoding_list);
