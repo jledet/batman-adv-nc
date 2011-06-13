@@ -99,7 +99,7 @@ int send_skb_packet(struct sk_buff *skb,
 	if (atomic_read(&bat_priv->catwoman)) {
 		skb_decoding = skb_clone(skb, GFP_ATOMIC);
 
-		/* Adjust skb-data to point at batman-packet */
+		/* Adjust skb->data to point at batman-packet */
 		skb_pull_rcsum(skb_decoding, ETH_HLEN);
 
 		add_decoding_skb(hard_iface, skb_decoding);

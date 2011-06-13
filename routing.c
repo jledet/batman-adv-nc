@@ -745,6 +745,7 @@ void receive_bat_packet(struct ethhdr *ethhdr,
 	/* if this OGM seqno equals last orig_node's seqno, OGM ttl
 	 * is only decremented by one, we add a coding possibility
 	 * and originator is our neighbor */
+
 	if (atomic_read(&bat_priv->catwoman))
 		if (is_coding_neighbor(orig_node, batman_packet))
 			coding_orig_neighbor(bat_priv, orig_node,

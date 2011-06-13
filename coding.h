@@ -124,7 +124,7 @@ static inline uint8_t random_scale_tq(uint8_t orig_tq)
 
 	get_random_bytes(&rand_val, 1);
 
-	return (rand_val * (TQ_MAX_VALUE - orig_tq)) / TQ_MAX_VALUE;
+	return TQ_MAX_VALUE - (rand_val * (TQ_MAX_VALUE - orig_tq)) / TQ_MAX_VALUE;
 }
 
 #endif /* _NET_BATMAN_ADV_CODING_H */

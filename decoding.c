@@ -103,11 +103,6 @@ struct unicast_packet *decode_packet(struct sk_buff *skb,
 	unicast_packet->ttl = ttl;
 	unicast_packet->decoding_id = id;
 
-	/*
-	printk(KERN_DEBUG "CW: Decoded: %hu xor %hu\n",
-			unicast_packet->decoding_id, decoding_packet->id);
-	*/
-
 	return unicast_packet;
 }
 

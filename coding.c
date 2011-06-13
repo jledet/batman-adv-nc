@@ -417,6 +417,7 @@ int send_coded_packet(struct sk_buff *skb,
 	struct orig_node *orig_node = neigh_node->orig_node;
 	struct coding_node *coding_node;
 	struct coding_packet *coding_packet;
+	struct sk_buff *skb_decoding;
 
 	/* for neighbor of orig_node */
 	rcu_read_lock();
@@ -429,9 +430,14 @@ int send_coded_packet(struct sk_buff *skb,
 			find_coding_packet(bat_priv, coding_node, ethhdr);
 
 		if (coding_packet) {
+#if 0
 			/* Save packets for later decoding */
-			/*add_decoding_skb(coding_packet->neigh_node->if_incoming, coding_packet->skb);*/
-			/*add_decoding_skb(neigh_node->if_incoming, skb);*/
+			skb_decoding = skb_clone(skb, GFP_ATOMIC);
+			add_decoding_skb(neigh_node->if_incoming, skb_decoding);
+			skb_decoding = skb_clone(coding_packet->skb, GFP_ATOMIC);
+			add_decoding_skb(coding_packet->neigh_node->if_incoming, skb_decoding);
+#endif
+
 			code_packets(bat_priv, skb, ethhdr, coding_packet,
 					neigh_node);
 			goto out;

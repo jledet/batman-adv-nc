@@ -39,10 +39,6 @@ struct hard_iface {
 	int16_t if_num;
 	char if_status;
 	struct net_device *net_dev;
-	/* Some 'hard' interfaces are actually virtual devices. 
-	 * CATWOMAN needs direct access to the transmit queue,
-	 * so this field should point to the real hardware interface */
-	struct net_device *real_net_dev;
 	atomic_t seqno;
 	atomic_t frag_seqno;
 	unsigned char *packet_buff;
