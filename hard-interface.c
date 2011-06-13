@@ -623,7 +623,7 @@ static int batman_skb_recv(struct sk_buff *skb, struct net_device *dev,
 	 * packets then give them a chance to do so here */
 	ret = NF_HOOK(PF_BRIDGE, NF_BR_LOCAL_IN, skb, dev, NULL,
 			batman_skb_recv_finish);
-	if (ret != 1)
+	if (ret != NF_ACCEPT)
 		goto err_out; 
 
 	/* packet should hold at least type and version */
