@@ -33,6 +33,8 @@
 #include "decoding.h"
 #include <linux/netfilter_bridge.h>
 
+#include "compat.h"
+
 static void send_outstanding_bcast_packet(struct work_struct *work);
 
 /* apply hop penalty for a normal link */
