@@ -13,7 +13,7 @@ static void purge_decoding(struct work_struct *work);
 static void start_decoding_timer(struct bat_priv *bat_priv)
 {
 	INIT_DELAYED_WORK(&bat_priv->decoding_work, purge_decoding);
-	queue_delayed_work(bat_event_workqueue, &bat_priv->decoding_work, 1 * HZ);
+	queue_delayed_work(bat_event_workqueue, &bat_priv->decoding_work, HZ/10);
 }
 
 /* Init decoding packet hash table, start purge delayed work */ 
@@ -61,8 +61,10 @@ struct unicast_packet *decode_packet(struct sk_buff *skb,
 		return NULL;
 	}
 
-	/* Realign mac header */
+	/* Data points at batman header, so set mac header 14 before
+	 * and network to data */
 	skb_set_mac_header(skb, -ETH_HLEN);
+	skb_reset_network_header(skb);
 	ethhdr = (struct ethhdr *)skb_mac_header(skb);
 	memcpy(ethhdr, &ethhdr_tmp, sizeof(struct ethhdr));
 

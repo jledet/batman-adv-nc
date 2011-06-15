@@ -68,14 +68,6 @@ int add_coding_node(struct orig_node *orig_node,
 		return -1;
 	}
 
-	if (compare_eth(orig_node->orig, neigh_orig_node->orig)) {
-		in_coding_node->topology = TOPOLOGY_AB;
-		out_coding_node->topology = TOPOLOGY_AB;
-	} else {
-		in_coding_node->topology = TOPOLOGY_X;
-		out_coding_node->topology = TOPOLOGY_X;
-	}
-
 	INIT_LIST_HEAD(&in_coding_node->list);
 	memcpy(in_coding_node->addr, orig_node->orig, ETH_ALEN);
 	in_coding_node->orig_node = neigh_orig_node;
@@ -170,7 +162,7 @@ static inline int coding_packet_timeout(struct bat_priv *bat_priv,
 			coding_packet->timestamp + (hold*HZ) / MSEC_PER_SEC);
 }
 
-/* Send coded packet */
+/* Send non-coded packet */
 void coding_send_packet(struct coding_packet *coding_packet)
 {
 	send_skb_packet(coding_packet->skb, coding_packet->neigh_node->if_incoming,
@@ -244,54 +236,17 @@ void code_packets(struct bat_priv *bat_priv,
 	const int header_add =
 		sizeof(struct coded_packet) - sizeof(struct unicast_packet);
 	unsigned int coding_len;
-	uint8_t coding_packet_first = 0, tq_avg_neigh, tq_avg_coding;
-	uint8_t rand_tq_neigh, rand_tq_coding;
+	uint8_t tq_avg_neigh, tq_avg_coding;
 	struct sk_buff *skb_dest, *skb_src;
 	struct unicast_packet *unicast_packet1;
 	struct unicast_packet *unicast_packet2;
 	struct coded_packet *coded_packet;
 	uint8_t *first_source, *first_dest, *second_source, *second_dest;
 
-	/* If enabled, choose random mac-dest based on weighted link quality. 
-	 * Otherwise, always use weakest node */
+	/* Setup variables for use in header */
 	tq_avg_neigh = neigh_node->orig_node->router->tq_avg;
 	tq_avg_coding = coding_packet->neigh_node->orig_node->router->tq_avg;
-	if (atomic_read(&bat_priv->catwoman_random_tq)) {
-		rand_tq_neigh = random_scale_tq(tq_avg_neigh);
-		rand_tq_coding = random_scale_tq(tq_avg_coding);
-		printk(KERN_DEBUG "NTQ: %d NRTQ: %d CTQ: %d CRTQ: %d\n",
-				tq_avg_neigh, rand_tq_neigh,
-				tq_avg_coding, rand_tq_coding);
-		if (rand_tq_neigh >= rand_tq_coding) {
-			coding_packet_first = 1;
-			atomic_inc(&bat_priv->catstat.coded_first);
-		} else {
-			atomic_inc(&bat_priv->catstat.neigh_first);
-		}
-	} else {
-		if (tq_avg_neigh >= tq_avg_coding)
-			coding_packet_first = 1;
-	}
-
-	/* Instead of zero padding the smallest data buffer, we
-	 * code into the largest. */
-	if (skb->len <= coding_packet->skb->len) {
-		skb_dest = coding_packet->skb;
-		skb_src = skb;
-	} else {
-		skb_dest = skb;
-		skb_src = coding_packet->skb;
-	}
-
-	/* The skb is also used for decoding, so copy before code */
-	/*skb_dest = skb_copy(skb_dest, GFP_ATOMIC);
-	if(!skb_dest)
-		return;*/
-
-	coding_len = skb_src->len - unicast_size;
-
-	/* Setup variables for use in header */
-	if (coding_packet_first) {
+	if (random_scale_tq(tq_avg_neigh) >= random_scale_tq(tq_avg_coding)) {
 		first_dest = coding_packet->coding_path->next_hop;
 		first_source = coding_packet->coding_path->prev_hop;
 		second_dest = neigh_node->addr;
@@ -306,6 +261,18 @@ void code_packets(struct bat_priv *bat_priv,
 		unicast_packet1 = (struct unicast_packet *)skb->data;
 		unicast_packet2 = (struct unicast_packet *)coding_packet->skb->data;
 	}
+
+	/* Instead of zero padding the smallest data buffer, we
+	 * code into the largest. */
+	if (skb->len <= coding_packet->skb->len) {
+		skb_dest = coding_packet->skb;
+		skb_src = skb;
+	} else {
+		skb_dest = skb;
+		skb_src = coding_packet->skb;
+	}
+
+	coding_len = skb_src->len - unicast_size;
 
 	/*
 	printk(KERN_DEBUG "CW: Coding packets: %hu xor %hu\n",
@@ -341,6 +308,7 @@ void code_packets(struct bat_priv *bat_priv,
 	 *   Code skb_src into skb_dest */
 	memxor(skb_dest->data + coded_size, skb_src->data + unicast_size, coding_len);
 
+	/* skb_dest might be the one from coding_packet, so free only skb_src */
 	dev_kfree_skb(skb_src);
 	coding_packet->skb = NULL;
 	coding_packet_free_ref(coding_packet);
@@ -392,9 +360,6 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 				atomic_dec(&bat_priv->coding_hash_count);
 
 				spin_unlock_bh(&coding_path->packet_list_lock);
-
-				topology_stats_update(bat_priv, in_coding_node, out_coding_node);
-
 				goto out;
 			}
 
@@ -423,21 +388,24 @@ int send_coded_packet(struct sk_buff *skb,
 	rcu_read_lock();
 	list_for_each_entry_rcu(coding_node,
 			&orig_node->in_coding_list, list) {
-		if (compare_eth(coding_node->addr, ethhdr->h_source))
-			continue;
-
 		coding_packet =
 			find_coding_packet(bat_priv, coding_node, ethhdr);
 
 		if (coding_packet) {
-#if 0
 			/* Save packets for later decoding */
 			skb_decoding = skb_clone(skb, GFP_ATOMIC);
 			add_decoding_skb(neigh_node->if_incoming, skb_decoding);
 			skb_decoding = skb_clone(coding_packet->skb, GFP_ATOMIC);
 			add_decoding_skb(coding_packet->neigh_node->if_incoming, skb_decoding);
-#endif
 
+			/* Update recoding counter */
+			if (((struct bat_skb_cb *)skb->cb)->decoded)
+				stats_update(bat_priv, STAT_RECODED);
+
+			if (((struct bat_skb_cb *)coding_packet->skb->cb)->decoded)
+				stats_update(bat_priv, STAT_RECODED);
+
+			/* Code and send packets */
 			code_packets(bat_priv, skb, ethhdr, coding_packet,
 					neigh_node);
 			goto out;
@@ -504,12 +472,23 @@ int add_coding_skb(struct sk_buff *skb,
 	struct coding_packet *coding_packet;
 
 	/* We only handle unicast packets */
-	if (unicast_packet->packet_type != BAT_UNICAST)
+	if (unicast_packet->packet_type != BAT_UNICAST) {
+		printk(KERN_DEBUG "CW: Dropping non-unicast packet (%hhu)",
+				unicast_packet->packet_type);
 		return NET_RX_DROP;
-
-	if (send_coded_packet(skb, neigh_node, ethhdr)) {
-		return NET_RX_SUCCESS;
 	}
+
+	if (((struct bat_skb_cb *)skb->cb)->decoded)
+		printk(KERN_DEBUG "CW: Trying to code decoded packet");
+
+	if (send_coded_packet(skb, neigh_node, ethhdr))
+		return NET_RX_SUCCESS;
+
+	if (((struct bat_skb_cb *)skb->cb)->decoded)
+		printk(KERN_DEBUG "CW: Adding decoded packet to packet pool");
+
+	coding_path = get_coding_path(bat_priv->coding_hash,
+			ethhdr->h_source, neigh_node->addr);
 
 	coding_packet = kzalloc(sizeof(struct coding_packet), GFP_ATOMIC);
 
@@ -627,13 +606,10 @@ void stats_reset(struct bat_priv *bat_priv)
 	atomic_set(&bat_priv->catstat.received, 0);
 	atomic_set(&bat_priv->catstat.forwarded, 0);
 	atomic_set(&bat_priv->catstat.coded, 0);
-	atomic_set(&bat_priv->catstat.coded_ab, 0);
-	atomic_set(&bat_priv->catstat.coded_x, 0);
 	atomic_set(&bat_priv->catstat.dropped, 0);
 	atomic_set(&bat_priv->catstat.decoded, 0);
 	atomic_set(&bat_priv->catstat.failed, 0);
-	atomic_set(&bat_priv->catstat.coded_first, 0);
-	atomic_set(&bat_priv->catstat.neigh_first, 0);
+	atomic_set(&bat_priv->catstat.recoded, 0);
 	write_sequnlock(&bat_priv->catstat.lock);
 }
 
@@ -659,36 +635,9 @@ void stats_update(struct bat_priv *bat_priv, uint32_t flags)
 			atomic_inc(&bat_priv->catstat.decoded);
 		if (flags & STAT_FAIL)
 			atomic_inc(&bat_priv->catstat.failed);
-		if (flags & STAT_CODED_AB)
-			atomic_inc(&bat_priv->catstat.coded_ab);
-		if (flags & STAT_CODED_X)
-			atomic_inc(&bat_priv->catstat.coded_x);
+		if (flags & STAT_RECODED)
+			atomic_inc(&bat_priv->catstat.recoded);
 		write_sequnlock(&bat_priv->catstat.lock);
-	}
-}
-
-void topology_stats_update(struct bat_priv *bat_priv,
-			   struct coding_node *in_coding_node,
-			   struct coding_node *out_coding_node)
-{
-	switch (in_coding_node->topology) {
-		case TOPOLOGY_AB:
-			stats_update(bat_priv, STAT_CODED_AB);
-			break;
-
-		case TOPOLOGY_X:
-			stats_update(bat_priv, STAT_CODED_X);
-			break;
-	}
-
-	switch (out_coding_node->topology) {
-		case TOPOLOGY_AB:
-			stats_update(bat_priv, STAT_CODED_AB);
-			break;
-
-		case TOPOLOGY_X:
-			stats_update(bat_priv, STAT_CODED_X);
-			break;
 	}
 }
 
@@ -700,8 +649,7 @@ int coding_stats(struct seq_file *seq, void *offset)
 	struct catwoman_stats *catstat = &bat_priv->catstat;
 	seqlock_t *lock = &catstat->lock;
 	int transmitted, received, forwarded, coded, dropped, decoded, failed,
-	    coding_list, decoding_list, coded_x, coded_ab,
-	    coded_first, neigh_first;
+	    coding_list, decoding_list, recoded;
 	unsigned long sval;
 
 	do {
@@ -713,10 +661,7 @@ int coding_stats(struct seq_file *seq, void *offset)
 		dropped     = atomic_read(&catstat->dropped);
 		decoded     = atomic_read(&catstat->decoded);
 		failed      = atomic_read(&catstat->failed);
-		coded_ab    = atomic_read(&catstat->coded_ab);
-		coded_x     = atomic_read(&catstat->coded_x);
-		coded_first = atomic_read(&catstat->coded_first);
-		neigh_first = atomic_read(&catstat->neigh_first);
+		recoded     = atomic_read(&catstat->recoded);
 	} while (read_seqretry(lock, sval));
 
 	coding_list = atomic_read(&bat_priv->coding_hash_count);
@@ -726,13 +671,10 @@ int coding_stats(struct seq_file *seq, void *offset)
 	seq_printf(seq, "Received:     %d\n", received);
 	seq_printf(seq, "Forwarded:    %d\n", forwarded);
 	seq_printf(seq, "Coded:        %d\n", coded);
-	seq_printf(seq, "Coded_ab:     %d\n", coded_ab);
-	seq_printf(seq, "Coded_x:      %d\n", coded_x);
+	seq_printf(seq, "Recoded:      %d\n", recoded);
 	seq_printf(seq, "Dropped:      %d\n", dropped);
 	seq_printf(seq, "Decoded:      %d\n", decoded);
 	seq_printf(seq, "Failed:       %d\n", failed);
-	seq_printf(seq, "Coded First:  %d\n", coded_first);
-	seq_printf(seq, "Neigh First:  %d\n", neigh_first);
 	seq_printf(seq, "\n");
 	seq_printf(seq, "Coding packets:   %d\n", coding_list);
 	seq_printf(seq, "Decoding packets: %d\n", decoding_list);
