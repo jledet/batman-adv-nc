@@ -318,9 +318,24 @@ void code_packets(struct bat_priv *bat_priv,
 	send_skb_packet(skb_dest, neigh_node->if_incoming, first_dest);
 }
 
+/* Check if the packet is decoded and if so, check that 
+ * we only code towards the source of the other */
+int recoding_possible(struct coding_node *coding_node,
+		struct sk_buff *skb)
+{
+	struct ethhdr *ethhdr = (struct ethhdr*)skb_mac_header(skb);
+
+	if (((struct bat_skb_cb *)skb->cb)->decoded &&
+			!compare_eth(coding_node->addr, ethhdr->h_source))
+		return 0;
+	else
+		return 1;
+}
+
 /* Find suitable packet to code with */
 struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 					 struct coding_node *in_coding_node,
+					 struct sk_buff *skb,
 					 struct ethhdr *ethhdr)
 {
 	struct hashtable_t *hash = bat_priv->coding_hash;
@@ -351,12 +366,26 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 						out_coding_node->addr))
 				continue;
 
+			if (!recoding_possible(out_coding_node, skb))
+				continue;
+
 			spin_lock_bh(&coding_path->packet_list_lock);
 
 			if (!list_empty(&coding_path->packet_list)) {
 				coding_packet =
 					list_first_entry(&coding_path->packet_list,
 						struct coding_packet, list);
+
+				if (!recoding_possible(in_coding_node,
+							coding_packet->skb)) {
+					/* One of the packets are decoded and
+					 * cannot be coded to this topology. */
+					printk(KERN_DEBUG "CW: Skipping recoding to bad topology");
+					spin_unlock_bh(&coding_path->packet_list_lock);
+					coding_packet = NULL;
+					continue;
+				}
+
 				list_del_rcu(&coding_packet->list);
 				atomic_dec(&bat_priv->coding_hash_count);
 
@@ -412,7 +441,7 @@ int send_coded_packet(struct sk_buff *skb,
 	list_for_each_entry_rcu(coding_node,
 			&orig_node->in_coding_list, list) {
 		coding_packet =
-			find_coding_packet(bat_priv, coding_node, ethhdr);
+			find_coding_packet(bat_priv, coding_node, skb, ethhdr);
 
 		if (coding_packet) {
 			/* Save packets for later decoding */
