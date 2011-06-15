@@ -246,7 +246,8 @@ void code_packets(struct bat_priv *bat_priv,
 	/* Setup variables for use in header */
 	tq_avg_neigh = neigh_node->orig_node->router->tq_avg;
 	tq_avg_coding = coding_packet->neigh_node->orig_node->router->tq_avg;
-	if (random_scale_tq(tq_avg_neigh) >= random_scale_tq(tq_avg_coding)) {
+	if (random_scale_tq(tq_avg_neigh, tq_avg_coding) >= 
+			random_scale_tq(tq_avg_coding, tq_avg_neigh)) {
 		first_dest = coding_packet->coding_path->next_hop;
 		first_source = coding_packet->coding_path->prev_hop;
 		second_dest = neigh_node->addr;
