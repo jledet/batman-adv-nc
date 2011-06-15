@@ -372,6 +372,29 @@ out:
 	return coding_packet;
 }
 
+/* Change the mac header of a unicast packet, that is coded and stored for
+ * use in later decoding */
+void add_decoding_before_coding(struct hard_iface *hard_iface,
+		struct sk_buff *skb,
+		char *dst)
+{
+	struct ethhdr *ethhdr;
+	struct ethhdr *ethhdr_orig = (struct ethhdr *)skb_mac_header(skb);
+
+	/* Copy entire skb because we need to change the mac header */
+	skb = skb_copy(skb, GFP_ATOMIC);
+	if (!skb)
+		return;
+
+	/* Set the mac header as if we actually sent the packet uncoded */
+	ethhdr = (struct ethhdr *)skb_mac_header(skb);
+	memcpy(ethhdr->h_dest, dst, ETH_ALEN);
+	memcpy(ethhdr->h_source, ethhdr_orig->h_dest, ETH_ALEN);
+
+	/* Add the packet to the decoding packet pool */
+	add_decoding_skb(hard_iface, skb);
+}
+
 /* Send coded packet */
 int send_coded_packet(struct sk_buff *skb,
 		      struct neigh_node *neigh_node,
@@ -382,7 +405,6 @@ int send_coded_packet(struct sk_buff *skb,
 	struct orig_node *orig_node = neigh_node->orig_node;
 	struct coding_node *coding_node;
 	struct coding_packet *coding_packet;
-	struct sk_buff *skb_decoding;
 
 	/* for neighbor of orig_node */
 	rcu_read_lock();
@@ -393,10 +415,12 @@ int send_coded_packet(struct sk_buff *skb,
 
 		if (coding_packet) {
 			/* Save packets for later decoding */
-			skb_decoding = skb_clone(skb, GFP_ATOMIC);
-			add_decoding_skb(neigh_node->if_incoming, skb_decoding);
-			skb_decoding = skb_clone(coding_packet->skb, GFP_ATOMIC);
-			add_decoding_skb(coding_packet->neigh_node->if_incoming, skb_decoding);
+			add_decoding_before_coding(neigh_node->if_incoming,
+					skb, neigh_node->addr);
+			add_decoding_before_coding(
+					coding_packet->neigh_node->if_incoming,
+					coding_packet->skb,
+					coding_packet->neigh_node->addr);
 
 			/* Update recoding counter */
 			if (((struct bat_skb_cb *)skb->cb)->decoded)
@@ -478,14 +502,8 @@ int add_coding_skb(struct sk_buff *skb,
 		return NET_RX_DROP;
 	}
 
-	if (((struct bat_skb_cb *)skb->cb)->decoded)
-		printk(KERN_DEBUG "CW: Trying to code decoded packet");
-
 	if (send_coded_packet(skb, neigh_node, ethhdr))
 		return NET_RX_SUCCESS;
-
-	if (((struct bat_skb_cb *)skb->cb)->decoded)
-		printk(KERN_DEBUG "CW: Adding decoded packet to packet pool");
 
 	coding_path = get_coding_path(bat_priv->coding_hash,
 			ethhdr->h_source, neigh_node->addr);

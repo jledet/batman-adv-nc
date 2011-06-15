@@ -67,6 +67,7 @@ int send_skb_packet(struct sk_buff *skb,
 	struct ethhdr *ethhdr;
 	struct sk_buff *skb_decoding;
 	struct bat_priv *bat_priv;
+	struct batman_packet *batman_packet;
 
 	if (hard_iface->if_status != IF_ACTIVE)
 		goto send_skb_err;
@@ -98,12 +99,12 @@ int send_skb_packet(struct sk_buff *skb,
 
 	/* Store packet for later network decoding */
 	bat_priv = netdev_priv(hard_iface->soft_iface);
-	if (atomic_read(&bat_priv->catwoman)) {
+	batman_packet = (struct batman_packet *)skb_network_header(skb);
+	if (atomic_read(&bat_priv->catwoman) &&
+			batman_packet->packet_type == BAT_UNICAST) {
+		/* Clone skb and adjust skb->data to point at batman-packet */
 		skb_decoding = skb_clone(skb, GFP_ATOMIC);
-
-		/* Adjust skb->data to point at batman-packet */
 		skb_pull_rcsum(skb_decoding, ETH_HLEN);
-
 		add_decoding_skb(hard_iface, skb_decoding);
 	}
 

@@ -194,7 +194,7 @@ void add_decoding_skb(struct hard_iface *hard_iface, struct sk_buff *skb)
 {
 	struct bat_priv *bat_priv = netdev_priv(hard_iface->soft_iface);
 	struct unicast_packet *unicast_packet =
-		(struct unicast_packet *)skb->data;
+		(struct unicast_packet *)skb_network_header(skb);
 	struct coding_packet *decoding_packet;
 	struct coding_path *decoding_path;
 	struct ethhdr *ethhdr = (struct ethhdr *)skb_mac_header(skb);
