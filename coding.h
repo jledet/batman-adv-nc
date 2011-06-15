@@ -111,13 +111,13 @@ static inline void memxor(char *data1, const char *data2, int len)
 		data1[i] = data1[i] ^ data2[i];
 }
 
-static inline uint8_t random_scale_tq(uint8_t orig_tq)
+static inline uint8_t random_scale_tq(uint8_t tq_first, uint8_t tq_second)
 {
 	uint8_t rand_val;
 
-	get_random_bytes(&rand_val, 1);
+	get_random_bytes(&rand_val, sizeof(rand_val));
 
-	return TQ_MAX_VALUE - (rand_val * (TQ_MAX_VALUE - orig_tq)) / TQ_MAX_VALUE;
+	return TQ_MAX_VALUE - (rand_val * (TQ_MAX_VALUE - tq_first)) / TQ_MAX_VALUE;
 }
 
 #endif /* _NET_BATMAN_ADV_CODING_H */

@@ -7,6 +7,7 @@
 #include <linux/netdevice.h>
 #include <net/sch_generic.h>
 #include <linux/rtnetlink.h>
+#include <linux/random.h>
 
 static void purge_decoding(struct work_struct *work);
 
@@ -19,12 +20,16 @@ static void start_decoding_timer(struct bat_priv *bat_priv)
 /* Init decoding packet hash table, start purge delayed work */ 
 int decoding_init(struct bat_priv *bat_priv)
 {
+	uint16_t init_id;
+
 	if (bat_priv->decoding_hash)
 		return 0;
 
 	atomic_set(&bat_priv->coding_hash_count, 0);
 	bat_priv->decoding_hash = hash_new(1024);
-	atomic_set(&bat_priv->last_decoding_id, 1);
+
+	get_random_bytes(&init_id, sizeof(init_id));
+	atomic_set(&bat_priv->last_decoding_id, init_id);
 
 	if (!bat_priv->decoding_hash)
 		return -1;
