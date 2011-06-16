@@ -320,7 +320,7 @@ void code_packets(struct bat_priv *bat_priv,
 
 /* Check if the packet is decoded and if so, check that 
  * we only code towards the source of the other */
-int recoding_possible(struct coding_node *coding_node,
+int skb_coding_possible(struct coding_node *coding_node,
 		struct sk_buff *skb)
 {
 	struct ethhdr *ethhdr = (struct ethhdr*)skb_mac_header(skb);
@@ -332,15 +332,25 @@ int recoding_possible(struct coding_node *coding_node,
 		return 1;
 }
 
+int packet_coding_possible(struct sk_buff *skb, uint8_t *dst, uint8_t *src)
+{
+	if (((struct bat_skb_cb *)skb->cb)->decoded &&
+			!compare_eth(dst, src))
+		return 0;
+	else
+		return 1;
+}
+
 /* Find suitable packet to code with */
 struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
-					 struct coding_node *in_coding_node,
 					 struct sk_buff *skb,
-					 struct ethhdr *ethhdr)
+					 uint8_t *skb_dst,
+					 uint8_t *skb_src,
+					 struct coding_node *in_coding_node)
 {
 	struct hashtable_t *hash = bat_priv->coding_hash;
 	struct hlist_node *node;
-	struct orig_node *orig_node = get_orig_node(bat_priv, ethhdr->h_source);
+	struct orig_node *orig_node = get_orig_node(bat_priv, skb_src);
 	struct coding_node *out_coding_node;
 	struct coding_packet *coding_packet = NULL;
 	struct coding_path *coding_path;
@@ -366,7 +376,7 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 						out_coding_node->addr))
 				continue;
 
-			if (!recoding_possible(out_coding_node, skb))
+			if (!skb_coding_possible(out_coding_node, skb))
 				continue;
 
 			spin_lock_bh(&coding_path->packet_list_lock);
@@ -376,11 +386,9 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 					list_first_entry(&coding_path->packet_list,
 						struct coding_packet, list);
 
-				if (!recoding_possible(in_coding_node,
-							coding_packet->skb)) {
-					/* One of the packets are decoded and
-					 * cannot be coded to this topology. */
-					printk(KERN_DEBUG "CW: Skipping recoding to bad topology");
+				if (!packet_coding_possible(coding_packet->skb,
+							skb_dst,
+							in_coding_node->addr)) {
 					spin_unlock_bh(&coding_path->packet_list_lock);
 					coding_packet = NULL;
 					continue;
@@ -388,7 +396,6 @@ struct coding_packet *find_coding_packet(struct bat_priv *bat_priv,
 
 				list_del_rcu(&coding_packet->list);
 				atomic_dec(&bat_priv->coding_hash_count);
-
 				spin_unlock_bh(&coding_path->packet_list_lock);
 				goto out;
 			}
@@ -441,7 +448,7 @@ int send_coded_packet(struct sk_buff *skb,
 	list_for_each_entry_rcu(coding_node,
 			&orig_node->in_coding_list, list) {
 		coding_packet =
-			find_coding_packet(bat_priv, coding_node, skb, ethhdr);
+			find_coding_packet(bat_priv, skb, neigh_node->addr, ethhdr->h_source, coding_node);
 
 		if (coding_packet) {
 			/* Save packets for later decoding */
